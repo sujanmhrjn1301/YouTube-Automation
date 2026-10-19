@@ -1,0 +1,24 @@
+# Core Video & Audio Pipeline Dependencies
+yt-dlp>=2024.8.0
+imageio-ffmpeg>=0.5.1
+faster-whisper>=1.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# LLM Providers & AI
+openai>=1.40.0
+google-genai>=1.0.0
+
+# Terminal UI & Formatting
+rich>=13.7.0
+click>=8.1.7
+pydantic>=2.0.0
+python-dotenv>=1.0.1
+
+# YouTube Data API v3 OAuth
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+
+# Database & Cloud Storage
+supabase>=2.5.0
