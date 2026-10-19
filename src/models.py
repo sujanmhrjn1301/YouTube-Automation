@@ -56,15 +56,36 @@ class FullTranscription(BaseModel):
     total_words: int = 0
 
 
+class ClipCut(BaseModel):
+    """Sub-segment for local multi-cut story condensation."""
+    start_time: float
+    end_time: float
+    role: Optional[str] = "content"  # e.g. "hook", "escalation", "payoff"
+
+
 class ViralClip(BaseModel):
     """Structured viral candidate output from LLM analysis."""
-    start_time: float = Field(..., description="Start timestamp in seconds")
-    end_time: float = Field(..., description="End timestamp in seconds")
+    start_time: float = Field(..., description="Start timestamp in seconds (or start of first cut)")
+    end_time: float = Field(..., description="End timestamp in seconds (or end of last cut)")
+    cuts: List[ClipCut] = Field(default_factory=list, description="Local condensed jump-cut segments")
     hook_title: str = Field(..., description="Punchy, attention-grabbing YouTube Shorts title")
     description: str = Field(..., description="Engaging description with relevant hashtags")
     tags: List[str] = Field(default_factory=list, description="SEO tags for viral reach")
     viral_reasoning: str = Field(..., description="Detailed explanation of why this moment hooks viewers")
     hook_score: int = Field(default=8, ge=1, le=10, description="Hook potential rating from 1 to 10")
+
+    @property
+    def total_duration(self) -> float:
+        """Calculate total condensed duration across all cuts."""
+        if self.cuts:
+            return round(sum(c.end_time - c.start_time for c in self.cuts), 2)
+        return round(self.end_time - self.start_time, 2)
+
+    def get_effective_cuts(self) -> List[ClipCut]:
+        """Return list of cuts, falling back to [start_time, end_time] if cuts is empty."""
+        if self.cuts:
+            return self.cuts
+        return [ClipCut(start_time=self.start_time, end_time=self.end_time, role="clip")]
 
 
 class VideoMetadata(BaseModel):
@@ -77,6 +98,7 @@ class VideoMetadata(BaseModel):
     video_path: str
     audio_path: str
     filesize_mb: float
+    was_live: bool = False
 
 
 class FaceTrackingBox(BaseModel):

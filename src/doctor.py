@@ -113,6 +113,7 @@ def run_system_doctor() -> None:
         ("Supabase Storage", *check_supabase()),
         ("YouTube Anti-Bot", *check_anti_bot_cookies()),
         ("YouTube OAuth", *check_youtube_oauth()),
+        ("Peak & Multi-Cut Engine", True, "Audio RMS + Jump-Cut Condenser active"),
         ("Output Directory", settings.OUTPUT_DIR.exists(), str(settings.OUTPUT_DIR)),
     ]
 

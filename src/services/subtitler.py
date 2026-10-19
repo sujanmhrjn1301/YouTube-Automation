@@ -3,10 +3,11 @@ Stage 5: Subtitling and Animated Karaoke Captions Service.
 Generates ASS format word-synchronized dynamic subtitles and burns them into 9:16 Shorts.
 """
 
+import re
 import subprocess
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from src.config import settings
 from src.console import (
@@ -16,6 +17,7 @@ from src.console import (
     log_error,
 )
 from src.models import FullTranscription, ViralClip, WordTimestamp
+from src.services.profanity_filter import ProfanityFilterService
 
 
 def format_ass_time(seconds: float) -> str:
@@ -43,23 +45,41 @@ class SubtitlerService:
         transcription: FullTranscription,
         clip: ViralClip,
     ) -> List[WordTimestamp]:
-        """Extract and normalize all words falling inside the viral clip time window."""
+        """
+        Extract and normalize words falling inside the viral clip time windows.
+        Supports seamless subtitle re-mapping across multi-cut jump-cuts.
+        """
         clip_words: List[WordTimestamp] = []
+        effective_cuts = clip.get_effective_cuts()
 
-        for seg in transcription.segments:
-            for w in seg.words:
-                if w.end >= clip.start_time and w.start <= clip.end_time:
-                    # Re-align timestamp relative to clip start (0.0s)
-                    rel_start = max(0.0, w.start - clip.start_time)
-                    rel_end = max(rel_start + 0.1, w.end - clip.start_time)
-                    clip_words.append(
-                        WordTimestamp(
-                            word=w.word,
-                            start=round(rel_start, 3),
-                            end=round(rel_end, 3),
-                            probability=w.probability,
+        p_filter = ProfanityFilterService()
+        cumulative_offset = 0.0
+        for cut in effective_cuts:
+            cut_duration = cut.end_time - cut.start_time
+            for seg in transcription.segments:
+                for w in seg.words:
+                    if w.end >= cut.start_time and w.start <= cut.end_time:
+                        rel_start = cumulative_offset + max(0.0, w.start - cut.start_time)
+                        rel_end = cumulative_offset + max(w.start - cut.start_time + 0.1, w.end - cut.start_time)
+                        display_w = w.word
+                        clean = re.sub(r"[^a-zA-Z]", "", display_w)
+                        if clean and p_filter.is_profane(clean):
+                            if len(clean) > 2:
+                                masked = clean[0] + "*" * (len(clean) - 2) + clean[-1]
+                            elif len(clean) == 2:
+                                masked = clean[0] + "*"
+                            else:
+                                masked = "*"
+                            display_w = display_w.replace(clean, masked)
+                        clip_words.append(
+                            WordTimestamp(
+                                word=display_w,
+                                start=round(rel_start, 3),
+                                end=round(rel_end, 3),
+                                probability=w.probability,
+                            )
                         )
-                    )
+            cumulative_offset += cut_duration
 
         return sorted(clip_words, key=lambda x: x.start)
 
@@ -136,6 +156,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         transcription: FullTranscription,
         clip: ViralClip,
         video_id: str,
+        output_filename: Optional[str] = None,
     ) -> str:
         """
         Generate dynamic word-level subtitles and burn them into the 9:16 Shorts video.
@@ -143,7 +164,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         log_stage(5, "Subtitles & Dynamic Captions", "Word-Synchronized Karaoke Highlighting")
 
         words = self.extract_clip_words(transcription, clip)
-        log_info("SUBTITLER", f"Extracted {len(words)} synchronized words for the {clip.end_time - clip.start_time:.1f}s clip.")
+        log_info("SUBTITLER", f"Extracted {len(words)} synchronized words for the {clip.total_duration:.1f}s clip.")
 
         ass_filename = f"{video_id}_{int(clip.start_time)}_{int(clip.end_time)}.ass"
         ass_path = self.subtitles_dir / ass_filename
@@ -151,8 +172,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         log_success("SUBTITLER", f"Generated ASS karaoke subtitles file: {ass_path}")
 
         # Final subtitled video output path
-        output_filename = f"{video_id}_final_shorts.mp4"
-        output_path = settings.OUTPUT_DIR / output_filename
+        out_name = output_filename or f"{video_id}_final_shorts.mp4"
+        output_path = settings.OUTPUT_DIR / out_name
 
         # Escape path for FFmpeg subtitles filter on Windows
         # Forward slashes with colon escaped: C\:/path/to/sub.ass

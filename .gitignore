@@ -4,10 +4,24 @@
 *.env
 client_secrets.json
 token.json
+token.pickle
+credentials.json
 cookies.txt
 output/cookies.txt
+*.cookies
+*.pem
+*.key
 
-# Python & Build artifacts
+# Local Databases, State & Logs
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+
+# Python & Build Artifacts
 __pycache__/
 *.py[cod]
 *$py.class
@@ -37,30 +51,47 @@ ENV/
 env.bak/
 venv.bak/
 
-# Testing & Coverage
+# Testing, Linting & Coverage
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
 .nox/
+.mypy_cache/
+.ruff_cache/
 
-# Media Pipeline Outputs & Large Temporary Files
+# Media Pipeline Outputs, Cache & Large Temp Files
 output/
 output/*
+data/
+data/*
+temp/
+tmp/
+scratch/
 *.mp4
-*.wav
-*.ass
 *.mkv
 *.webm
+*.avi
+*.mov
+*.wav
+*.mp3
+*.aac
+*.m4a
+*.ass
+*.srt
+*.vtt
 
 # Machine Learning Models (auto-downloaded)
 models/*.onnx
+*.onnx
 
-# IDEs & System Files
+# IDEs & OS System Files
 .vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
 .DS_Store
 Thumbs.db
+ehthumbs.db
 desktop.ini

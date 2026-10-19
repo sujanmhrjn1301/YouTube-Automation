@@ -80,6 +80,8 @@ class Settings:
         "YOUTUBE_TOKEN_FILE",
         str(BASE_DIR / "token.json")
     )
+    YOUTUBE_TARGET_EMAIL: str = os.getenv("YOUTUBE_TARGET_EMAIL", "maharjansujan.official@gmail.com")
+    YOUTUBE_TARGET_HANDLE: str = os.getenv("YOUTUBE_TARGET_HANDLE", "@MR.EIJI05")
 
     # FFmpeg Binary Path
     FFMPEG_PATH: str = resolve_ffmpeg_path()

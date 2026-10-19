@@ -136,8 +136,23 @@ class IngestionService:
         video_id: str = info.get("id", "video")
         title: str = info.get("title", "Unknown Title")
         author: str = info.get("uploader", info.get("channel", "Unknown Channel"))
-        duration: float = float(info.get("duration", 0.0))
+        duration: float = float(info.get("duration") or 0.0)
         view_count: int = info.get("view_count", 0)
+        is_live: bool = bool(info.get("is_live") or info.get("live_status") == "is_live")
+        was_live: bool = bool(info.get("was_live") or info.get("live_status") == "was_live")
+
+        if is_live:
+            log_error(
+                "INGESTION",
+                f"⛔ ACTIVE LIVESTREAM DETECTED: '{title}' is currently broadcasting live!\n"
+                f"   Peak detection and jump-cut synthesis require a completed broadcast or VOD.\n"
+                f"   Please wait until the livestream concludes before clipping.",
+            )
+            raise RuntimeError(f"Cannot process ongoing livestream '{title}'. Please wait until the stream finishes broadcasting.")
+
+        if duration <= 0.0:
+            log_error("INGESTION", f"Invalid video duration ({duration}s) for video: '{title}'.")
+            raise ValueError(f"Video '{title}' has zero or unknown duration.")
 
         log_table("Source Video Metadata", {
             "Video ID": video_id,
@@ -243,4 +258,5 @@ class IngestionService:
             video_path=str(video_path),
             audio_path=str(audio_path),
             filesize_mb=filesize_mb,
+            was_live=was_live,
         )
