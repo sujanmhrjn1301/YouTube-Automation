@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -31,6 +32,7 @@ class DatabaseService:
         self.key = settings.SUPABASE_SERVICE_ROLE_KEY
         self.bucket_name = settings.SUPABASE_SHORTS_BUCKET
         self.livestream_bucket_name = settings.SUPABASE_LIVESTREAM_SHORTS_BUCKET
+        self.longform_bucket_name = settings.SUPABASE_LONGFORM_BUCKET
         self.local_db_path = settings.OUTPUT_DIR / "shorts.db"
         self.json_history_path = settings.OUTPUT_DIR / "shorts_metadata.json"
         self.client: Optional[Client] = None
@@ -86,6 +88,8 @@ class DatabaseService:
                 cursor.execute("ALTER TABLE shorts_metadata ADD COLUMN is_confirmed_uploaded INTEGER DEFAULT 0")
             if "confirmed_at" not in existing_cols:
                 cursor.execute("ALTER TABLE shorts_metadata ADD COLUMN confirmed_at TEXT")
+            if "scheduled_publish_at" not in existing_cols:
+                cursor.execute("ALTER TABLE shorts_metadata ADD COLUMN scheduled_publish_at TEXT")
 
             # 2. Multi-part series linking table
             cursor.execute("""
@@ -249,16 +253,46 @@ class DatabaseService:
             bucket_name=target_bucket,
         )
 
+    def upload_longform_video(
+        self,
+        file_path: str,
+        remote_filename: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Exclusively uploads 7-9m longform narrative feature videos
+        to the dedicated SUPABASE_LONGFORM_BUCKET ('longform-videos').
+        Guarantees strict isolation from Shorts and standard reels buckets.
+        """
+        target_bucket = self.longform_bucket_name
+        self.ensure_bucket_exists(target_bucket, public=True)
+        path_obj = Path(file_path)
+        if not path_obj.exists():
+            log_error("DATABASE", f"File not found for longform upload: {file_path}")
+            return None
+
+        if not remote_filename:
+            stem = path_obj.stem.replace("[", "").replace("]", "").replace(" ", "_")
+            safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem)
+            safe_stem = re.sub(r'_+', '_', safe_stem).strip('_')
+            remote_filename = f"features/{safe_stem or 'longform'}.mp4"
+
+        return self.upload_to_storage(
+            file_path=file_path,
+            remote_filename=remote_filename,
+            bucket_name=target_bucket,
+        )
+
     def upload_to_storage(
         self,
         file_path: str,
         remote_filename: Optional[str] = None,
+        is_post_livestream: bool = False,
         is_livestream: bool = False,
         bucket_name: Optional[str] = None,
     ) -> Optional[str]:
         """
         Upload final video file to Supabase Storage bucket.
-        Organizes files into shorts/standard/ or shorts/livestreams/ folders.
+        Organizes files into shorts/standard/ or shorts/post_livestreams/ folders.
         Supports explicit bucket targeting for guaranteed isolation.
         Returns public URL if available.
         """
@@ -272,9 +306,10 @@ class DatabaseService:
             return None
 
         target_bucket = bucket_name or self.bucket_name
+        is_post_live = bool(is_post_livestream or is_livestream)
 
         if not remote_filename:
-            folder = "shorts/livestreams" if is_livestream else "shorts/standard"
+            folder = "shorts/post_livestreams" if is_post_live else "shorts/standard"
             stem = path_obj.stem.replace("[", "").replace("]", "").replace(" ", "_")
             safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem)
             safe_stem = re.sub(r'_+', '_', safe_stem).strip('_')
@@ -575,6 +610,35 @@ class DatabaseService:
         except Exception as e:
             log_warning("DATABASE", f"Failed to mark part confirmed: {e}")
 
+    def mark_short_uploaded(
+        self,
+        short_id: int,
+        source_video_id: str,
+        part_number: int,
+        youtube_id: str,
+        scheduled_at: Optional[str] = None,
+    ) -> None:
+        """Mark a Short as uploaded (or scheduled) in SQLite and video_series."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        yt_url = f"https://www.youtube.com/shorts/{youtube_id}" if youtube_id else ""
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE shorts_metadata
+                SET is_confirmed_uploaded = 1, confirmed_at = ?, youtube_id = ?, scheduled_publish_at = ?
+                WHERE id = ?
+            """, (now_iso, youtube_id, scheduled_at, short_id))
+            cursor.execute("""
+                UPDATE video_series
+                SET is_confirmed = 1, confirmed_at = ?, youtube_id = ?, youtube_url = ?
+                WHERE source_video_id = ? AND part_number = ?
+            """, (now_iso, youtube_id, yt_url, source_video_id, part_number))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            log_warning("DATABASE", f"Failed to mark short #{short_id} uploaded: {e}")
+
     def get_series_summary(self, source_video_id: str) -> List[Dict[str, Any]]:
         """Retrieve all parts and confirmation status for a source video."""
         try:
@@ -779,7 +843,6 @@ class DatabaseService:
         except Exception as e:
             log_warning("DATABASE", f"Supabase storage download failed ({e}). Attempting public HTTP download...")
             try:
-                import urllib.request
                 urllib.request.urlretrieve(remote_path_or_url, str(t_path))
                 if t_path.exists() and t_path.stat().st_size > 1024:
                     return str(t_path)
@@ -794,34 +857,52 @@ class DatabaseService:
         source_video_id: str,
         part_number: int,
         youtube_id: str,
+        scheduled_at: Optional[str] = None,
     ) -> None:
-        """Mark Short as uploaded across local SQLite, video_series, and Supabase."""
+        """Mark Short as uploaded across local SQLite, video_series, and Supabase with schedule support."""
         now_iso = datetime.now(timezone.utc).isoformat()
+        yt_url = f"https://www.youtube.com/shorts/{youtube_id}" if youtube_id else ""
         # 1. Update SQLite
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE shorts_metadata
-                SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?
+                SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?, scheduled_publish_at = ?
                 WHERE id = ? OR (source_video_id = ? AND part_number = ?)
-            """, (youtube_id, now_iso, record_id, source_video_id, part_number))
+            """, (youtube_id, now_iso, scheduled_at, record_id, source_video_id, part_number))
+            if cursor.rowcount == 0:
+                s_url = f"https://www.youtube.com/watch?v={source_video_id}" if source_video_id else ""
+                cursor.execute("""
+                    INSERT INTO shorts_metadata (id, source_url, source_video_id, part_number, youtube_id, is_confirmed_uploaded, confirmed_at, scheduled_publish_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+                """, (record_id, s_url, source_video_id, part_number, youtube_id, now_iso, scheduled_at, now_iso))
+            cursor.execute("""
+                UPDATE video_series
+                SET is_confirmed = 1, confirmed_at = ?, youtube_id = ?, youtube_url = ?
+                WHERE source_video_id = ? AND part_number = ?
+            """, (now_iso, youtube_id, yt_url, source_video_id, part_number))
             conn.commit()
             conn.close()
         except Exception as e:
             log_warning("DATABASE", f"SQLite mark uploaded note: {e}")
 
-        # 2. Update video_series table
-        self.mark_part_confirmed(source_video_id, part_number, youtube_id)
-
-        # 3. Update Supabase table
+        # 2. Update Supabase table
         if self.client:
             try:
-                self.client.table("shorts_metadata").update({
+                payload = {
                     "youtube_id": youtube_id,
                     "is_confirmed_uploaded": True,
                     "confirmed_at": now_iso,
-                }).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
+                }
+                if scheduled_at:
+                    try:
+                        self.client.table("shorts_metadata").update({**payload, "scheduled_publish_at": scheduled_at}).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
+                    except Exception:
+                        self.client.table("shorts_metadata").update(payload).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
+                else:
+                    self.client.table("shorts_metadata").update(payload).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
             except Exception as e:
                 log_warning("DATABASE", f"Supabase mark uploaded note: {e}")
+
 

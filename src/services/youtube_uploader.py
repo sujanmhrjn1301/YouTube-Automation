@@ -137,9 +137,11 @@ class YouTubeUploaderService:
         video_path: str,
         clip: ViralClip,
         privacy_status: str = "public",
+        publish_at: Optional[str] = None,
     ) -> Optional[str]:
         """
         Upload video to YouTube as a Short with chunked progress reporting.
+        Supports scheduled release via publish_at (ISO-8601).
         Returns YouTube Video ID on success.
         """
         log_stage(6, "YouTube Shorts Upload", "YouTube Data API v3 OAuth Resumable Upload")
@@ -182,6 +184,24 @@ class YouTubeUploaderService:
                 "selfDeclaredMadeForKids": False,
             },
         }
+
+        # Handle YouTube native scheduled release (publishAt)
+        if publish_at:
+            # YouTube API constraint: privacyStatus MUST be private when publishAt is provided
+            body["status"]["privacyStatus"] = "private"
+            try:
+                from datetime import datetime, timezone
+                if isinstance(publish_at, str):
+                    clean_str = publish_at.replace("Z", "+00:00")
+                    dt = datetime.fromisoformat(clean_str)
+                else:
+                    dt = publish_at
+                utc_iso = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                body["status"]["publishAt"] = utc_iso
+                log_info("YOUTUBE_UPLOADER", f"📅 [SCHEDULED PUBLISH] YouTube publication scheduled for: {utc_iso} (Status: Private until release)")
+            except Exception as e:
+                log_warning("YOUTUBE_UPLOADER", f"Could not parse publish_at '{publish_at}': {e}")
+                body["status"]["publishAt"] = str(publish_at)
 
         # Check daily quota usage
         from src.services.database import DatabaseService

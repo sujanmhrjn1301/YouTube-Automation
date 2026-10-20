@@ -110,7 +110,7 @@ from src.utils import generate_short_filename, slice_transcription
     "--stream-mode",
     is_flag=True,
     default=False,
-    help="Livestream mode: Uses Audio Energy peak detection & multi-clip batch extraction.",
+    help="Post-livestream mode: Uses Audio Energy peak detection & multi-clip batch extraction for stream VODs.",
 )
 @click.option(
     "--clips-count",
@@ -310,11 +310,11 @@ def run_pipeline(
         # ─────────────────────────────────────────────────────────────
         # STAGE 2: Multi-Part Peak Detection & Targeted Extraction
         # ─────────────────────────────────────────────────────────────
-        # Accurately distinguish Livestreams from Standard edited videos:
+        # Accurately distinguish Post-Livestreams (stream VODs) from Standard edited videos:
         # 1. User passed --stream-mode
         # 2. YouTube metadata explicitly says it was a live broadcast (was_live = True)
         # 3. Very long unedited archive (duration >= 2 hours / 7200s)
-        is_stream_video = bool(stream_mode or getattr(video_meta, "was_live", False) or video_meta.duration >= 7200.0)
+        is_post_livestream = bool(stream_mode or getattr(video_meta, "was_live", False) or video_meta.duration >= 7200.0)
 
         effective_clips_count = clips_count if clips_count > 0 else 3
         if video_meta.duration < 90.0:
@@ -322,7 +322,7 @@ def run_pipeline(
         elif video_meta.duration < 180.0:
             effective_clips_count = min(2, effective_clips_count)
 
-        peak_window_dur = 150.0 if is_stream_video else 120.0
+        peak_window_dur = 150.0 if is_post_livestream else 120.0
         log_stage(2, "Peak Detection & Multi-Part Extraction", f"Waveform Energy Scanning (Target: {effective_clips_count} Peak Parts)")
         peak_detector = PeakDetectorService()
         peaks = peak_detector.find_top_peak_windows(
@@ -362,11 +362,11 @@ def run_pipeline(
                 log_warning("ORCHESTRATOR", f"No dialogue detected in {part_label}. Skipping...")
                 continue
 
-            allow_cuts = bool(multi_cut and not is_stream_video and not single_clip)
+            allow_cuts = bool(multi_cut and not is_post_livestream and not single_clip)
             viral_clip = viral_detector.detect_viral_moment(
                 window_transcript,
                 allow_multi_cut=allow_cuts,
-                allow_extended_duration=is_stream_video,
+                allow_extended_duration=is_post_livestream,
             )
 
             # Auto-label title with [Part X] if multi-part series
@@ -381,7 +381,7 @@ def run_pipeline(
                 video_id=video_meta.video_id,
                 duration=viral_clip.total_duration,
                 clip_index=part_num,
-                is_livestream=is_stream_video,
+                is_livestream=is_post_livestream,
             )
 
             from src.services.profanity_filter import ProfanityFilterService
@@ -409,7 +409,7 @@ def run_pipeline(
 
             # Determine whether captions should be burned
             effective_captions = captions and not no_subtitles
-            if (is_stream_video or not captions or no_subtitles) and "--captions" not in sys.argv:
+            if (is_post_livestream or not captions or no_subtitles) and "--captions" not in sys.argv:
                 # Streams and long VODs default to clean video without captions
                 effective_captions = False
 
@@ -474,7 +474,7 @@ def run_pipeline(
 
             st_url = None
             if db_service.client:
-                st_url = db_service.upload_to_storage(subtitled_path, is_livestream=is_stream_video)
+                st_url = db_service.upload_to_storage(subtitled_path, is_post_livestream=is_post_livestream)
 
             db_service.save_clip_record(
                 source_url=url,

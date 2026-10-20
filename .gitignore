@@ -4,6 +4,8 @@
 *.env
 client_secrets.json
 token.json
+tokens/
+dashboard/accounts.json
 token.pickle
 credentials.json
 cookies.txt

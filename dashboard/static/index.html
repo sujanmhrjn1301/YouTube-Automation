@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shorts Studio · Pipeline Control</title>
+  <meta name="description"
+    content="Local control room for the YouTube Shorts pipeline: create Shorts, run the live agent, publish the queue and browse your library.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=42">
+</head>
+
+<body>
+  <!-- Icon sprite (Lucide-style strokes) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-menu" viewBox="0 0 24 24">
+        <line x1="4" x2="20" y1="12" y2="12" />
+        <line x1="4" x2="20" y1="6" y2="6" />
+        <line x1="4" x2="20" y1="18" y2="18" />
+      </symbol>
+      <symbol id="i-panel-left-close" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="3.5" />
+        <path d="M9 3v18" />
+        <path d="M16 9l-3 3 3 3" />
+      </symbol>
+      <symbol id="i-panel-left" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="3.5" />
+        <path d="M9 3v18" />
+        <path d="M16 9l-3 3 3 3" />
+      </symbol>
+      <symbol id="i-panel-left-open" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="3.5" />
+        <path d="M9 3v18" />
+        <path d="M14 9l3 3-3 3" />
+      </symbol>
+      <symbol id="i-overview" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="9" rx="1.5" />
+        <rect x="14" y="3" width="7" height="5" rx="1.5" />
+        <rect x="14" y="12" width="7" height="9" rx="1.5" />
+        <rect x="3" y="16" width="7" height="5" rx="1.5" />
+      </symbol>
+      <symbol id="i-scissors" viewBox="0 0 24 24">
+        <circle cx="6" cy="6" r="3" />
+        <path d="M8.12 8.12 12 12" />
+        <path d="M20 4 8.12 15.88" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M14.8 14.8 20 20" />
+      </symbol>
+      <symbol id="i-radio" viewBox="0 0 24 24">
+        <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+        <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" />
+        <circle cx="12" cy="12" r="2" />
+        <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" />
+        <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19" />
+      </symbol>
+      <symbol id="i-send" viewBox="0 0 24 24">
+        <path d="m22 2-7 20-4-9-9-4Z" />
+        <path d="M22 2 11 13" />
+      </symbol>
+      <symbol id="i-film" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M7 3v18" />
+        <path d="M3 7.5h4" />
+        <path d="M3 12h18" />
+        <path d="M3 16.5h4" />
+        <path d="M17 3v18" />
+        <path d="M17 7.5h4" />
+        <path d="M17 16.5h4" />
+      </symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+      </symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24">
+        <path d="M20 7h-9" />
+        <path d="M14 17H5" />
+        <circle cx="17" cy="17" r="3" />
+        <circle cx="7" cy="7" r="3" />
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <polygon points="7 4 19 12 7 20 7 4" />
+      </symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24">
+        <rect x="6" y="6" width="12" height="12" rx="2" />
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
+      <symbol id="i-external" viewBox="0 0 24 24">
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24">
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path
+          d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol id="i-key" viewBox="0 0 24 24">
+        <circle cx="7.5" cy="15.5" r="5.5" />
+        <path d="m21 2-9.6 9.6" />
+        <path d="m15.5 7.5 3 3L22 7l-3-3" />
+      </symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24">
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24">
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol id="i-chevron-left" viewBox="0 0 24 24">
+        <path d="m15 18-6-6 6-6" />
+      </symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </symbol>
+      <symbol id="i-terminal" viewBox="0 0 24 24">
+        <polyline points="4 17 10 11 4 5" />
+        <line x1="12" x2="20" y1="19" y2="19" />
+      </symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24">
+        <rect width="13" height="13" x="9" y="9" rx="2" />
+        <path d="M5 15c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2" />
+      </symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+        <path d="M8 16H3v5" />
+      </symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24">
+        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+      </symbol>
+      <symbol id="i-youtube" viewBox="0 0 24 24">
+        <path
+          d="M2.5 17a24 24 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.6 49.6 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24 24 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.6 49.6 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
+        <path d="m10 15 5-3-5-3z" />
+      </symbol>
+      <symbol id="i-yt-logo" viewBox="0 0 24 24">
+        <path
+          d="M20.5245 6.00694C20.3025 5.81544 20.0333 5.70603 19.836 5.63863C19.6156 5.56337 19.3637 5.50148 19.0989 5.44892C18.5677 5.34348 17.9037 5.26005 17.1675 5.19491C15.6904 5.06419 13.8392 5 12 5C10.1608 5 8.30956 5.06419 6.83246 5.1949C6.09632 5.26005 5.43231 5.34348 4.9011 5.44891C4.63628 5.50147 4.38443 5.56337 4.16403 5.63863C3.96667 5.70603 3.69746 5.81544 3.47552 6.00694C3.26514 6.18846 3.14612 6.41237 3.07941 6.55976C3.00507 6.724 2.94831 6.90201 2.90314 7.07448C2.81255 7.42043 2.74448 7.83867 2.69272 8.28448C2.58852 9.18195 2.53846 10.299 2.53846 11.409C2.53846 12.5198 2.58859 13.6529 2.69218 14.5835C2.74378 15.047 2.81086 15.4809 2.89786 15.8453C2.97306 16.1603 3.09841 16.5895 3.35221 16.9023C3.58757 17.1925 3.92217 17.324 4.08755 17.3836C4.30223 17.461 4.55045 17.5218 4.80667 17.572C5.32337 17.6733 5.98609 17.7527 6.72664 17.8146C8.2145 17.9389 10.1134 18 12 18C13.8865 18 15.7855 17.9389 17.2733 17.8146C18.0139 17.7527 18.6766 17.6733 19.1933 17.572C19.4495 17.5218 19.6978 17.461 19.9124 17.3836C20.0778 17.324 20.4124 17.1925 20.6478 16.9023C20.9016 16.5895 21.0269 16.1603 21.1021 15.8453C21.1891 15.4809 21.2562 15.047 21.3078 14.5835C21.4114 13.6529 21.4615 12.5198 21.4615 11.409C21.4615 10.299 21.4115 9.18195 21.3073 8.28448C21.2555 7.83868 21.1874 7.42043 21.0969 7.07448C21.0517 6.90201 20.9949 6.72401 20.9206 6.55976C20.8539 6.41236 20.7349 6.18846 20.5245 6.00694Z"
+          stroke="#ff0033" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        <path d="M14.5385 11.5L10.0962 14.3578L10.0962 8.64207L14.5385 11.5Z" stroke="#ff0033" fill="#ff0033"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect width="16" height="11" x="4" y="11" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </symbol>
+      <symbol id="i-down" viewBox="0 0 24 24">
+        <path d="M12 5v14" />
+        <path d="m19 12-7 7-7-7" />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24">
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+        <path
+          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+      </symbol>
+      <symbol id="i-database" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5" />
+        <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3" />
+      </symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24">
+        <path
+          d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <div class="app">
+    <!-- Sidebar (Resizable & Collapsible) -->
+    <aside class="sidebar" id="sidebar" aria-label="Primary">
+      <div class="brand">
+        <!-- Logo Button (in expanded: logo; in collapsed: morphs to sidebar expand icon on hover with tooltip) -->
+        <button class="brand-logo-btn" id="sidebar-logo-btn" aria-label="Expand sidebar">
+          <div class="brand-mark" aria-hidden="true">
+            <svg class="icon brand-logo-icon">
+              <use href="#i-yt-logo" />
+            </svg>
+          </div>
+          <div class="brand-expand-icon" aria-hidden="true">
+            <svg class="icon">
+              <use href="#i-panel-left-open" />
+            </svg>
+          </div>
+          <span class="sidebar-hover-tooltip">Open sidebar</span>
+        </button>
+
+        <div class="brand-text">
+          <div class="brand-name">Shorts Studio</div>
+          <div class="brand-sub" id="sidebar-account-handle">@eijishorts</div>
+        </div>
+
+        <!-- Sidebar Collapse Button in expanded mode (top-right of header) -->
+        <button class="sidebar-toggle-btn" id="sidebar-toggle" aria-label="Collapse sidebar">
+          <svg class="icon">
+            <use href="#i-panel-left-close" />
+          </svg>
+          <span class="sidebar-hover-tooltip toggle-tooltip">Close sidebar</span>
+        </button>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-label">Workspace</div>
+        <a href="#/overview" class="nav-item" data-view="overview" id="nav-overview" title="Overview"><svg class="icon">
+            <use href="#i-overview" />
+          </svg><span class="nav-text">Overview</span></a>
+        <a href="#/create" class="nav-item" data-view="create" id="nav-create" title="Create Shorts"><svg class="icon">
+            <use href="#i-scissors" />
+          </svg><span class="nav-text">Create</span></a>
+        <a href="#/live" class="nav-item" data-view="live" id="nav-live" title="Live agent"><svg class="icon">
+            <use href="#i-radio" />
+          </svg><span class="nav-text">Live Agent</span></a>
+        <a href="#/publish" class="nav-item" data-view="publish" id="nav-publish" title="Pending Uploads"><svg
+            class="icon">
+            <use href="#i-send" />
+          </svg><span class="nav-text">Pending Uploads</span></a>
+
+        <div class="nav-label">Content</div>
+        <a href="#/library" class="nav-item" data-view="library" id="nav-library" title="Library"><svg class="icon">
+            <use href="#i-film" />
+          </svg><span class="nav-text">Library</span></a>
+        <a href="#/scheduled" class="nav-item" data-view="scheduled" id="nav-scheduled" title="Scheduled Releases"><svg
+            class="icon">
+            <use href="#i-clock" />
+          </svg><span class="nav-text">Scheduled</span><span class="nav-badge" id="scheduled-nav-badge"
+            style="display:none; background:rgba(167, 139, 250, 0.2); color:#c4b5fd;">0</span></a>
+        <a href="#/supabase" class="nav-item" data-view="supabase" id="nav-supabase" title="Supabase"><svg class="icon">
+            <use href="#i-database" />
+          </svg><span class="nav-text">Supabase</span></a>
+
+        <div class="nav-label">Maintenance</div>
+        <a href="#/system" class="nav-item" data-view="system" id="nav-system" title="System"><svg class="icon">
+            <use href="#i-sliders" />
+          </svg><span class="nav-text">System</span></a>
+      </nav>
+
+      <!-- Sidebar Target Account Switcher Section -->
+      <div class="sidebar-account-box" id="sidebar-account-box">
+        <div class="sidebar-account-header">
+          <span class="sidebar-account-label">Target Account</span>
+        </div>
+        <div class="sidebar-account-card" id="sidebar-account-card" title="Click to switch target YouTube account">
+          <div class="sidebar-account-avatar">
+            <svg class="icon">
+              <use href="#i-yt-logo" />
+            </svg>
+            <span class="sidebar-account-dot ok" id="sidebar-account-dot"></span>
+          </div>
+          <div class="sidebar-account-details">
+            <div class="sidebar-account-title" id="sidebar-account-name">Eiji Shorts</div>
+            <div class="sidebar-account-handle-text" id="sidebar-account-handle-badge">@eijishorts</div>
+          </div>
+          <button type="button" class="sidebar-account-toggle-btn" id="sidebar-account-toggle-btn"
+            aria-label="Switch account" title="Switch account">
+            <svg class="icon">
+              <use href="#i-refresh" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Sidebar Accounts Quick Switch Popup -->
+        <div class="sidebar-account-menu" id="sidebar-account-menu" hidden>
+          <div class="sidebar-account-menu-item active" data-account-id="alternate">
+            <div class="sidebar-menu-item-info">
+              <strong class="sidebar-menu-item-name">EIJI Shorts</strong>
+              <span class="sidebar-menu-item-handle">@eijishorts</span>
+              <span class="sidebar-menu-item-email">mhrznsuzan.alternate@gmail.com</span>
+            </div>
+            <svg class="icon custom-dropdown-check">
+              <use href="#i-check" />
+            </svg>
+          </div>
+          <div class="sidebar-account-menu-item" data-account-id="official">
+            <div class="sidebar-menu-item-info">
+              <strong class="sidebar-menu-item-name">Suzzane</strong>
+              <span class="sidebar-menu-item-handle">@MR.EIJI05</span>
+              <span class="sidebar-menu-item-email">maharjansujan.official@gmail.com</span>
+            </div>
+            <svg class="icon custom-dropdown-check">
+              <use href="#i-check" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drag Resizer Handle -->
+      <div class="sidebar-resizer" id="sidebar-resizer" title="Drag to resize sidebar"></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-title-wrap">
+          <h1 id="page-title">Overview</h1>
+          <p id="page-sub" class="muted">Your pipeline at a glance.</p>
+        </div>
+
+        <div class="topbar-actions">
+          <!-- Theme Palette Selector -->
+          <div class="theme-picker topbar-theme-picker" title="Switch theme palette">
+            <button class="theme-btn" data-set="youtube" aria-label="YouTube Red"></button>
+            <button class="theme-btn" data-set="obsidian" aria-label="Obsidian Studio"></button>
+            <button class="theme-btn" data-set="emerald" aria-label="Emerald Pro"></button>
+          </div>
+
+          <!-- Notification / Activity Button & Flyout -->
+          <div class="activity-bell-wrapper" id="activity-bell-wrapper">
+            <button type="button" class="btn-topbar-bell" id="btn-topbar-activity" aria-label="Activity & Notifications"
+              title="Activity & Notifications">
+              <svg class="icon">
+                <use href="#i-bell" />
+              </svg>
+              <span class="bell-pulse-dot" id="activity-pulse-dot" style="display:none;"></span>
+              <span class="bell-badge" id="running-badge" style="display:none;">0</span>
+            </button>
+
+            <!-- Activity Notification Dropdown Menu -->
+            <div class="activity-dropdown" id="activity-dropdown" hidden>
+              <div class="activity-dropdown-header">
+                <div class="activity-dropdown-title-wrap">
+                  <svg class="icon" style="width:15px; height:15px;">
+                    <use href="#i-bell" />
+                  </svg>
+                  <span class="activity-dropdown-title">Activity & Notifications</span>
+                </div>
+                <div class="activity-dropdown-actions">
+                  <button type="button" class="btn-icon-xs" id="activity-dropdown-refresh" title="Refresh Activity">
+                    <svg class="icon" style="width:12px; height:12px;">
+                      <use href="#i-refresh" />
+                    </svg>
+                  </button>
+                  <button type="button" class="btn-icon-xs" id="activity-dropdown-close" title="Close">
+                    <svg class="icon" style="width:12px; height:12px;">
+                      <use href="#i-x" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Notifications list -->
+              <div class="activity-dropdown-body" id="activity-dropdown-list">
+                <div class="activity-empty-state">
+                  <svg class="icon" style="width:24px; height:24px; opacity:0.3;">
+                    <use href="#i-bell" />
+                  </svg>
+                  <span>No recent activity</span>
+                </div>
+              </div>
+
+              <!-- Dropdown Footer with Server Status -->
+              <div class="activity-dropdown-footer">
+                <div class="activity-status-row">
+                  <span class="dot ok" id="server-dot"></span>
+                  <span id="server-status" class="activity-status-text">Connected</span>
+                </div>
+                <button type="button" class="btn-link-sm" id="btn-open-terminal-from-activity">
+                  <svg class="icon" style="width:12px; height:12px;">
+                    <use href="#i-terminal" />
+                  </svg>
+                  <span>View Terminal</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- OVERVIEW -->
+      <section class="view" data-view="overview" aria-labelledby="page-title">
+        <div class="stats">
+          <div class="stat"><span class="stat-label">Total Shorts</span><span class="stat-value" id="st-total">–</span>
+          </div>
+          <div class="stat"><span class="stat-label">Published</span><span class="stat-value" id="st-uploaded">–</span>
+          </div>
+          <div class="stat"><span class="stat-label">In queue</span><span class="stat-value" id="st-pending">–</span>
+          </div>
+          <div class="stat"><span class="stat-label">Live agent clips</span><span class="stat-value"
+              id="st-live">–</span></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <h2>Quick start</h2>
+            </div>
+            <div class="quick">
+              <a class="quick-item" href="#/create" id="quick-create">
+                <span class="quick-icon"><svg class="icon">
+                    <use href="#i-scissors" />
+                  </svg></span>
+                <span><strong>Create Shorts</strong><small>Turn any video into vertical clips</small></span>
+                <svg class="icon chev">
+                  <use href="#i-chevron" />
+                </svg>
+              </a>
+              <a class="quick-item" href="#/live" id="quick-live">
+                <span class="quick-icon"><svg class="icon">
+                    <use href="#i-radio" />
+                  </svg></span>
+                <span><strong>Watch a livestream</strong><small>Clip moments while it is live</small></span>
+                <svg class="icon chev">
+                  <use href="#i-chevron" />
+                </svg>
+              </a>
+              <a class="quick-item" href="#/publish" id="quick-publish">
+                <span class="quick-icon"><svg class="icon">
+                    <use href="#i-send" />
+                  </svg></span>
+                <span><strong>Publish the queue</strong><small>Send saved Shorts to YouTube</small></span>
+                <svg class="icon chev">
+                  <use href="#i-chevron" />
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>YouTube quota today</h2>
+            </div>
+            <div class="quota">
+              <div class="quota-num"><span id="q-left">–</span><small>uploads left</small></div>
+              <div class="meter">
+                <div class="meter-fill" id="q-fill"></div>
+              </div>
+              <div class="quota-meta muted"><span id="q-used">0</span> / 10,000 units · 1,600 per upload · resets
+                midnight PT</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Recent Shorts</h2>
+            <a href="#/library" class="link-btn" id="recent-all">View library <svg class="icon">
+                <use href="#i-chevron" />
+              </svg></a>
+          </div>
+          <ul class="rows" id="recent-list"></ul>
+        </div>
+      </section>
+
+      <!-- CREATE -->
+      <section class="view" data-view="create" hidden>
+        <div class="create-container">
+          <form class="card form create-card" id="form-process" autocomplete="off" novalidate>
+            <div class="card-head">
+              <h2>Select Pipeline Workflow</h2>
+            </div>
+
+            <!-- 3 Selectable Modes -->
+            <div class="create-modes" role="radiogroup" id="create-mode-selector">
+              <button type="button" class="mode-btn" data-mode="standard" aria-checked="true">
+                <div class="mode-btn-head"><svg class="icon">
+                    <use href="#i-scissors" />
+                  </svg>Normal Video</div>
+                <div class="mode-btn-sub">Clip other YouTubers' regular videos</div>
+              </button>
+              <button type="button" class="mode-btn" data-mode="stream" aria-checked="false">
+                <div class="mode-btn-head"><svg class="icon">
+                    <use href="#i-film" />
+                  </svg>Post Livestream</div>
+                <div class="mode-btn-sub">Clip finished/concluded live streams</div>
+              </button>
+              <button type="button" class="mode-btn" data-mode="live" aria-checked="false">
+                <div class="mode-btn-head"><svg class="icon">
+                    <use href="#i-radio" />
+                  </svg>Monitor Live</div>
+                <div class="mode-btn-sub">Watch active live stream in real time</div>
+              </button>
+              <button type="button" class="mode-btn" data-mode="longform" aria-checked="false" id="mode-btn-longform">
+                <div class="mode-btn-head"><svg class="icon">
+                    <use href="#i-film" />
+                  </svg>Video Edit</div>
+                <div class="mode-btn-sub">7 to 9 min narrative YouTube video</div>
+              </button>
+            </div>
+
+            <div id="mode-badge-container" style="margin-top:-2px;">
+              <div id="mode-badge"
+                style="display:inline-flex; align-items:center; gap:6px; color:var(--text-secondary); font-size:12px; padding:4px 0; background:transparent;">
+                <svg class="icon" style="width:14px; height:14px; color:var(--accent-light);"><use href="#i-film" /></svg>
+                <span>Standard Video Mode · Snaps to natural sentences</span>
+              </div>
+            </div>
+
+            <!-- Live Stream Preview Player (shown when mode=live and URL is present) -->
+            <div id="create-live-preview-box" style="display:none; margin-bottom:14px; border-radius:var(--radius-lg); overflow:hidden; border:1px solid rgba(255,255,255,0.08); background:#000;">
+              <div style="position:relative; width:100%; padding-top:56.25%;">
+                <iframe id="create-live-preview-iframe" src="" style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+              </div>
+              <div style="padding:10px 14px; display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); border-top:1px solid rgba(255,255,255,0.06);">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="live-dot" style="width:8px; height:8px; border-radius:50%; background:#ff0033; display:inline-block;"></span>
+                  <span style="font-size:12px; font-weight:600; color:#ffffff;">Watching Livestream Preview</span>
+                </div>
+                <a href="#/live" class="btn btn-ghost btn-xs" style="font-size:11px; padding:4px 10px;">
+                  <svg class="icon" style="width:12px; height:12px;"><use href="#i-radio"/></svg>
+                  <span>Open Full Live Agent</span>
+                </a>
+              </div>
+            </div>
+
+            <label class="field">
+              <span class="field-label" id="create-url-label">YouTube Video URL</span>
+              <input type="url" name="url" id="process-url" class="input"
+                placeholder="https://www.youtube.com/watch?v=..." required>
+              <span class="field-hint" id="create-url-hint">Enter the YouTube video URL to analyze and extract viral
+                Shorts.</span>
+            </label>
+
+            <!-- Mode-specific options: Live controls only show when mode=live -->
+            <div id="create-live-controls" style="display:none; flex-direction:column; gap:12px;">
+              <div class="field">
+                <span class="field-label">Live Agent Mode</span>
+                <div class="segmented" role="radiogroup" data-name="mode" id="create-live-mode">
+                  <button type="button" role="radio" data-value="continuous" aria-checked="true">Continuous</button>
+                  <button type="button" role="radio" data-value="once" aria-checked="false">Single clip</button>
+                </div>
+              </div>
+              <div class="field row">
+                <div><span class="field-label">Buffer length</span><span class="field-hint">Seconds captured per
+                    pass</span></div>
+                <div class="stepper" data-name="chunk" data-min="60" data-max="600" data-inc="30"
+                  id="create-live-chunk">
+                  <button type="button" data-step="-1" aria-label="Shorter">–</button>
+                  <output>150</output>
+                  <button type="button" data-step="1" aria-label="Longer">+</button>
+                </div>
+              </div>
+              <div class="field row">
+                <div><span class="field-label">Check every</span><span class="field-hint">Seconds between passes</span>
+                </div>
+                <div class="stepper" data-name="poll" data-min="15" data-max="600" data-inc="15" id="create-live-poll">
+                  <button type="button" data-step="-1" aria-label="Less often">–</button>
+                  <output>45</output>
+                  <button type="button" data-step="1" aria-label="More often">+</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Longform Video Edit Controls (shown when mode=longform) -->
+            <div id="create-longform-controls" style="display:none; flex-direction:column; gap:14px;">
+              <div class="field">
+                <span class="field-label">Target Runtime (Strictly 7–9 Minutes)</span>
+                <div class="segmented" role="radiogroup" data-name="longform-runtime" id="longform-runtime-selector">
+                  <button type="button" role="radio" data-value="420" aria-checked="false">7 Min (420s)</button>
+                  <button type="button" role="radio" data-value="480" aria-checked="true">8 Min (480s) ·
+                    Recommended</button>
+                  <button type="button" role="radio" data-value="540" aria-checked="false">9 Min (540s)</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <span class="field-label">Key Moment Focus Timestamp (Optional)</span>
+                <input type="text" id="longform-focus-ts" class="input"
+                  placeholder="e.g. 4210 or 01:10:10 (Auto-detected from URL)" value="4210">
+                <span class="field-hint">Anchor the 6-act narrative arc around a key boss fight, raid, or climax (Warden
+                  encounter at 4210s).</span>
+              </div>
+
+              <div class="field">
+                <span class="field-label">Motion Graphics & Audio Polish</span>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px;">
+                  <label class="checkbox-row"
+                    style="padding:10px; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.05); cursor:pointer;">
+                    <input type="checkbox" id="longform-punch-ins" checked>
+                    <div>
+                      <strong>1.15x Punch-in Zooms</strong>
+                      <div class="muted small">Dynamic zoom on vocal spikes & scares</div>
+                    </div>
+                  </label>
+                  <label class="checkbox-row"
+                    style="padding:10px; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.05); cursor:pointer;">
+                    <input type="checkbox" id="longform-chapter-cards" checked>
+                    <div>
+                      <strong>Chapter Lower-Thirds</strong>
+                      <div class="muted small">Cinematic Act titles on screen</div>
+                    </div>
+                  </label>
+                  <label class="checkbox-row"
+                    style="padding:10px; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.05); cursor:pointer;">
+                    <input type="checkbox" id="longform-loudnorm" checked>
+                    <div>
+                      <strong>YouTube Audio (-14 LUFS)</strong>
+                      <div class="muted small">Dual-pass R128 loudness mastering</div>
+                    </div>
+                  </label>
+                  <label class="checkbox-row"
+                    style="padding:10px; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.05); cursor:pointer;">
+                    <input type="checkbox" id="longform-dead-air" checked>
+                    <div>
+                      <strong>Trim Dead Air</strong>
+                      <div class="muted small">Cut silence > 0.7s automatically</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Standard & Stream controls (hidden when live) -->
+            <div id="create-standard-controls" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="field">
+                <span class="field-label">Framing</span>
+                <div class="segmented" role="radiogroup" data-name="crop" id="process-crop">
+                  <button type="button" role="radio" data-value="blurred_background"
+                    aria-checked="true">Blurred</button>
+                  <button type="button" role="radio" data-value="face_tracking" aria-checked="false">Face track</button>
+                  <button type="button" role="radio" data-value="center_crop" aria-checked="false">Center</button>
+                </div>
+              </div>
+
+              <div class="field row">
+                <div>
+                  <span class="field-label">Number of Shorts</span>
+                  <span class="field-hint">Peak moments to extract</span>
+                </div>
+                <div class="stepper" data-name="clips" data-min="1" data-max="10" id="process-clips">
+                  <button type="button" data-step="-1" aria-label="Fewer">–</button>
+                  <output>3</output>
+                  <button type="button" data-step="1" aria-label="More">+</button>
+                </div>
+              </div>
+            </div>
+
+            <label class="toggle-row">
+              <span><strong>Publish to YouTube</strong><small>Otherwise saved to Supabase cloud queue</small></span>
+              <input type="checkbox" name="autoUpload" class="switch" id="process-autoupload">
+            </label>
+
+            <details class="advanced" id="create-advanced">
+              <summary><svg class="icon">
+                  <use href="#i-chevron" />
+                </svg>Advanced</summary>
+              <div class="advanced-body">
+                <label class="toggle-row"><span><strong>Skip captions</strong><small>No burned-in karaoke
+                      subtitles</small></span><input type="checkbox" name="noCaptions" class="switch"
+                    id="process-nocaptions"></label>
+                <label class="toggle-row"><span><strong>Keep swear words</strong><small>Disable censor
+                      bleeps</small></span><input type="checkbox" name="noBleep" class="switch"
+                    id="process-nobleep"></label>
+                <label class="toggle-row"><span><strong>Keep raw download</strong><small>Do not delete source video
+                      file</small></span><input type="checkbox" name="keepRaw" class="switch"
+                    id="process-keepraw"></label>
+                <label class="field">
+                  <span class="field-label">Transcription model</span>
+                  <select name="model" class="input" id="process-model">
+                    <option value="tiny">Tiny · fastest</option>
+                    <option value="base" selected>Base · balanced</option>
+                    <option value="small">Small · better</option>
+                    <option value="medium">Medium · slow</option>
+                    <option value="large-v3">Large · best</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+
+            <!-- In-Div Pipeline Workflow Progress (Active 3-word status & loading bar) -->
+            <div id="workflow-active-progress" class="workflow-active-progress" style="display:none;">
+              <div class="workflow-progress-card">
+                <div class="workflow-progress-top">
+                  <div class="workflow-status-badge">
+                    <span class="status-pulse-ring" id="workflow-pulse-ring"></span>
+                    <span id="workflow-3word-status" class="workflow-3word-status">Starting Pipeline Workflow...</span>
+                  </div>
+                  <div class="workflow-progress-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-terminal-drawer"
+                      title="Toggle Slide-in Terminal Drawer">
+                      <svg class="icon">
+                        <use href="#i-terminal" />
+                      </svg>
+                      <span>View Terminal</span>
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" id="btn-workflow-stop" title="Stop execution">
+                      <svg class="icon">
+                        <use href="#i-stop" />
+                      </svg>
+                      <span>Stop</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Animated Loading Bar -->
+                <div class="workflow-bar-track" id="workflow-bar-track">
+                  <div class="workflow-bar-fill" id="workflow-bar-fill" style="width: 5%;">
+                    <div class="workflow-bar-shimmer"></div>
+                  </div>
+                </div>
+
+                <div class="workflow-progress-footer">
+                  <span id="workflow-stage-detail" class="workflow-stage-detail">Stage 1 of 7 · Ingesting Video
+                    Audio</span>
+                  <span id="workflow-pct-label" class="workflow-pct-label">14%</span>
+                </div>
+
+                <!-- Post-completion quick actions (hidden until completed) -->
+                <div id="workflow-completed-actions" class="workflow-completed-actions" style="display:none;">
+                  <a href="#/library" class="btn btn-primary btn-sm" id="btn-workflow-view-library">
+                    <svg class="icon">
+                      <use href="#i-film" />
+                    </svg>View in Library
+                  </a>
+                  <button type="button" class="btn btn-ghost btn-sm" id="btn-workflow-reset">
+                    <svg class="icon">
+                      <use href="#i-refresh" />
+                    </svg>New Pipeline
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="process-start">
+              <svg class="icon">
+                <use href="#i-play" />
+              </svg><span id="create-start-text">Start Clipping Video</span>
+            </button>
+          </form>
+
+          <div id="run-process" style="display:none;"></div>
+        </div>
+      </section>
+
+      <!-- LIVE AGENT -->
+      <section class="view" data-view="live" hidden>
+        <div class="live-agent-container">
+          <!-- Top Stream Setup & Control Bar -->
+          <div class="card live-setup-card" style="padding:16px 20px;">
+            <div class="live-setup-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+              <div class="live-setup-title-wrap" style="display:flex; align-items:center; gap:10px;">
+                <span class="live-pulse-badge" id="live-agent-status-badge">
+                  <span class="live-pulse-dot" id="live-agent-status-dot"></span>
+                  <span id="live-agent-status-text">Ready to Watch</span>
+                </span>
+                <h2 id="live-stream-heading" style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0;">Live Stream Monitor & Player</h2>
+              </div>
+              <div class="live-setup-actions" id="live-setup-actions" style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-live-toggle-chat" title="Toggle YouTube Live Chat">
+                  <svg class="icon"><use href="#i-radio"/></svg>
+                  <span id="live-chat-toggle-text">Show Live Chat</span>
+                </button>
+                <a href="#" target="_blank" class="btn btn-ghost btn-sm" id="btn-live-external-yt" style="display:none;" title="Open in YouTube">
+                  <svg class="icon"><use href="#i-youtube"/></svg><span>Watch on YouTube</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- URL Input Bar (Quick launch or switch stream) -->
+            <div class="live-url-bar" style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+              <div style="flex:1; position:relative;">
+                <input type="url" id="live-agent-stream-url" class="input" placeholder="Enter active YouTube livestream URL (e.g. https://www.youtube.com/watch?v=sxQvCbpnk2c)" style="padding-left:36px; width:100%;">
+                <svg class="icon" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; opacity:0.5;"><use href="#i-radio"/></svg>
+              </div>
+              <button type="button" class="btn btn-primary" id="btn-live-load-player">
+                <svg class="icon"><use href="#i-play"/></svg>
+                <span>Load Live Stream</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Live Layout: Video Player + Live Chat + Agent Panel -->
+          <div class="live-layout-grid" id="live-layout-grid" style="display:grid; grid-template-columns:1fr 340px; gap:16px; margin-top:16px;">
+            <!-- Left: Live Video Player & Stream Details -->
+            <div class="live-player-col" style="display:flex; flex-direction:column; gap:14px;">
+              <!-- Responsive 16:9 Video Player Frame -->
+              <div class="card live-player-card" style="padding:0; overflow:hidden; border-radius:var(--radius-lg); background:#000; position:relative;">
+                <div class="live-player-wrapper" style="position:relative; width:100%; padding-top:56.25%;">
+                  <iframe id="live-stream-iframe" 
+                          src="" 
+                          style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;" 
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                          allowfullscreen>
+                  </iframe>
+                  <div class="live-player-placeholder" id="live-player-placeholder" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(circle at center, rgba(30,30,35,0.9), #0a0a0c); color:var(--text-secondary); text-align:center; padding:20px;">
+                    <svg class="icon" style="width:48px; height:48px; color:var(--accent); opacity:0.8; margin-bottom:12px;"><use href="#i-radio"/></svg>
+                    <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:6px;">No Live Stream Loaded</h3>
+                    <p class="muted small" style="max-width:360px; margin-bottom:16px;">Enter a YouTube livestream link above or click below to watch the stream live with audio and video.</p>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-live-load-demo" style="border:1px solid rgba(255,255,255,0.1);">
+                      Load Active Stream (sxQvCbpnk2c)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stream Info Bar Below Player -->
+              <div class="card live-info-card" style="padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <div class="live-channel-badge" style="width:36px; height:36px; border-radius:50%; background:rgba(255,0,51,0.1); border:1px solid rgba(255,0,51,0.25); display:flex; align-items:center; justify-content:center;">
+                    <svg class="icon" style="width:18px; height:18px; color:var(--accent);"><use href="#i-youtube"/></svg>
+                  </div>
+                  <div>
+                    <h3 id="live-player-stream-title" style="font-size:14px; font-weight:600; color:var(--text-primary); margin:0;">Live Broadcast</h3>
+                    <div id="live-player-stream-sub" class="muted small" style="margin-top:2px;">Watching in real-time · Low latency HLS embed</div>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span class="chip chip-ok" id="live-stream-sync-chip" style="font-size:11px;">
+                    <span class="dot ok"></span> Low Latency
+                  </span>
+                  <button type="button" class="btn btn-ghost btn-sm" id="btn-live-reload-stream" title="Reload Video Feed">
+                    <svg class="icon"><use href="#i-refresh"/></svg><span>Reload Feed</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Live Agent Controls & Chat Drawer -->
+            <div class="live-sidebar-col" style="display:flex; flex-direction:column; gap:14px;">
+              <!-- Live Autonomous Clipper Card -->
+              <div class="card live-agent-control-card" style="padding:16px;">
+                <div class="card-head" style="margin-bottom:12px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <svg class="icon" style="color:var(--accent);"><use href="#i-scissors"/></svg>
+                    <h3 style="font-size:14px; font-weight:600;">Autonomous Clipper</h3>
+                  </div>
+                  <span class="chip chip-warn" id="live-agent-active-chip" style="font-size:11px; display:none;">Active</span>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                  <div class="field">
+                    <span class="field-label">Buffer Window</span>
+                    <div class="segmented" id="live-buffer-segmented">
+                      <button type="button" role="radio" data-value="120" aria-checked="false">2m</button>
+                      <button type="button" role="radio" data-value="150" aria-checked="true">2.5m</button>
+                      <button type="button" role="radio" data-value="240" aria-checked="false">4m</button>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <span class="field-label">Check Interval</span>
+                    <div class="segmented" id="live-interval-segmented">
+                      <button type="button" role="radio" data-value="30" aria-checked="false">30s</button>
+                      <button type="button" role="radio" data-value="45" aria-checked="true">45s</button>
+                      <button type="button" role="radio" data-value="60" aria-checked="false">60s</button>
+                    </div>
+                  </div>
+
+                  <label class="toggle-row" style="padding:6px 0;">
+                    <span><strong>Auto-Publish</strong><small>Push clips straight to YouTube</small></span>
+                    <input type="checkbox" id="live-auto-publish-toggle" class="switch">
+                  </label>
+
+                  <div style="display:flex; gap:8px; margin-top:6px;">
+                    <button type="button" class="btn btn-primary" id="btn-live-start-agent" style="flex:1;">
+                      <svg class="icon"><use href="#i-play"/></svg>
+                      <span id="btn-live-start-agent-text">Start Clipping Stream</span>
+                    </button>
+                    <button type="button" class="btn btn-danger" id="btn-live-stop-agent" style="display:none;">
+                      <svg class="icon"><use href="#i-stop"/></svg>
+                      <span>Stop</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live Chat Container (Toggled) -->
+              <div class="card live-chat-card" id="live-chat-card" style="display:none; padding:0; overflow:hidden; height:420px; position:relative;">
+                <div class="card-head" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02);">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <svg class="icon" style="width:14px; height:14px;"><use href="#i-message-square"/></svg>
+                    <span style="font-size:12px; font-weight:600;">YouTube Live Chat</span>
+                  </div>
+                  <button type="button" class="btn-icon-xs" id="btn-close-live-chat" title="Close Chat">
+                    <svg class="icon"><use href="#i-x"/></svg>
+                  </button>
+                </div>
+                <iframe id="live-chat-iframe" src="" style="width:100%; height:calc(100% - 40px); border:none;"></iframe>
+              </div>
+
+              <!-- Stream Session Clips List -->
+              <div class="card live-clips-card" style="flex:1; padding:16px;">
+                <div class="card-head" style="margin-bottom:10px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <svg class="icon"><use href="#i-film"/></svg>
+                    <h3 style="font-size:13px; font-weight:600;">Stream Highlights</h3>
+                  </div>
+                  <span class="chip chip-quiet" id="live-clips-count-badge">0 clips</span>
+                </div>
+                <div id="live-session-clips-list" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;">
+                  <div class="muted small" style="text-align:center; padding:16px;">
+                    No clips detected yet. As the agent listens, viral spikes will appear here instantly.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PUBLISH -->
+      <section class="view" data-view="publish" hidden>
+        <!-- Top Queue & Quota Card -->
+        <div class="card" style="padding:16px 20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 style="font-size:15px; font-weight:600;">Pending Upload Queue</h2>
+                <span class="chip chip-warn" id="queue-count">0 ready</span>
+              </div>
+              <p class="muted small" style="margin-top:2px;">Each Short is ready to publish to YouTube <strong
+                  id="publish-banner-account" style="color:var(--text-primary);">@eijishorts</strong> with 1 click.</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px;">
+              <div class="quota" style="min-width:180px; padding:0;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                  <span style="font-size:12px; font-weight:500;">YouTube Quota</span>
+                  <span class="muted small"><span id="q2-left">–</span> left today</span>
+                </div>
+                <div class="meter">
+                  <div class="meter-fill" id="q2-fill"></div>
+                </div>
+              </div>
+
+              <div class="btn-row" style="margin-top:0;">
+                <button class="btn btn-primary" id="publish-next"><svg class="icon">
+                    <use href="#i-send" />
+                  </svg>Publish Next</button>
+                <button class="btn btn-ghost" id="publish-all">Publish All</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Publish Sub-bar: Account Switcher, Category Dropdown & Top < 1 > Pagination -->
+        <div class="publish-subbar">
+          <div class="publish-subbar-left">
+            <!-- Account Switcher Dropdown -->
+            <div class="custom-dropdown account-switch-dropdown" id="account-switch-dropdown">
+              <button type="button" class="custom-dropdown-btn account-switch-btn" id="account-switch-btn"
+                aria-haspopup="listbox" aria-expanded="false" title="Switch YouTube upload destination">
+                <span class="account-dot ok" id="account-active-dot"></span>
+                <span class="account-btn-label">
+                  <span class="account-btn-prefix">Target:</span>
+                  <strong class="account-btn-name" id="account-active-name">EIJI Shorts</strong>
+                  <span class="account-btn-email muted" id="account-active-email">mhrznsuzan.alternate@gmail.com</span>
+                </span>
+                <svg class="icon custom-dropdown-arrow">
+                  <use href="#i-chevron" />
+                </svg>
+              </button>
+              <ul class="custom-dropdown-menu account-switch-menu" id="account-switch-menu" role="listbox"
+                tabindex="-1">
+                <!-- Dynamically loaded from /api/accounts -->
+              </ul>
+            </div>
+
+            <!-- Custom Styled Category Dropdown -->
+            <div class="custom-dropdown" id="publish-category-dropdown">
+              <button type="button" class="custom-dropdown-btn" id="category-dropdown-btn" aria-haspopup="listbox"
+                aria-expanded="false">
+                <span class="custom-dropdown-label" id="category-dropdown-label">All Categories</span>
+                <svg class="icon custom-dropdown-arrow">
+                  <use href="#i-chevron" />
+                </svg>
+              </button>
+              <ul class="custom-dropdown-menu" id="category-dropdown-menu" role="listbox" tabindex="-1">
+                <li class="custom-dropdown-item active" data-value="all" role="option" aria-selected="true">
+                  <span>All Categories</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+                <li class="custom-dropdown-item" data-value="live" role="option" aria-selected="false">
+                  <span>Live stream clips</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+                <li class="custom-dropdown-item" data-value="stream" role="option" aria-selected="false">
+                  <span>Post Livestream</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+                <li class="custom-dropdown-item" data-value="standard" role="option" aria-selected="false">
+                  <span>Normal Clips</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+              </ul>
+              <!-- Hidden native select for backwards compatibility / forms -->
+              <select id="publish-category-filter" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                <option value="all">All Categories</option>
+                <option value="live">Live stream clips</option>
+                <option value="stream">Post Livestream</option>
+                <option value="standard">Normal Clips</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="publish-subbar-right">
+            <!-- Top Compact < 1 > Pagination -->
+            <div class="top-pagination" id="publish-top-pagination">
+              <button class="top-page-btn" id="top-prev-btn" title="Previous page" disabled>
+                <svg class="icon">
+                  <use href="#i-chevron-left" />
+                </svg>
+              </button>
+              <div class="top-page-indicator">
+                <span id="top-page-num">1</span>
+                <span class="top-page-total" id="top-page-total">/ 1</span>
+              </div>
+              <button class="top-page-btn" id="top-next-btn" title="Next page" disabled>
+                <svg class="icon">
+                  <use href="#i-chevron" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4x3 Responsive Card Grid -->
+        <div id="publish-grid-container" class="publish-grid">
+          <div class="muted" style="padding:40px; text-align:center; grid-column:1/-1;">Loading queue...</div>
+        </div>
+
+        <!-- Background Upload Tracker (logs stream into Slide-in Terminal Drawer) -->
+        <div id="run-publish" style="display:none !important;"></div>
+      </section>
+
+      <!-- LIBRARY -->
+      <section class="view" data-view="library" hidden>
+        <div class="toolbar">
+          <div class="tabs" role="tablist" id="lib-tabs">
+            <button role="tab" data-filter="all" aria-selected="true">All</button>
+            <button role="tab" data-filter="edited" aria-selected="false">
+              <svg class="icon" style="margin-right:6px; width:13px; height:13px;"><use href="#i-video"/></svg>Edited Videos<span class="chip-count" id="lib-edited-count" style="margin-left:6px; font-size:10px; padding:1px 6px; border-radius:9999px; background:rgba(255,255,255,0.08); display:none;">0</span>
+            </button>
+            <button role="tab" data-filter="scheduled" aria-selected="false">Scheduled</button>
+            <button role="tab" data-filter="standard" aria-selected="false">Standard</button>
+            <button role="tab" data-filter="live" aria-selected="false">Live agent</button>
+            <button role="tab" data-filter="pending" aria-selected="false">In queue</button>
+            <button role="tab" data-filter="published" aria-selected="false">Published</button>
+          </div>
+          <label class="search">
+            <svg class="icon">
+              <use href="#i-search" />
+            </svg>
+            <input type="search" id="lib-search" placeholder="Search titles">
+          </label>
+        </div>
+        <div class="card flush">
+          <ul class="rows" id="lib-list"></ul>
+        </div>
+      </section>
+
+      <!-- SCHEDULED RELEASES MANAGER -->
+      <section class="view" data-view="scheduled" hidden>
+        <div class="scheduled-header-card">
+          <div class="scheduled-header-left">
+            <div class="scheduled-title-row">
+              <h2 style="font-size:16px; font-weight:600; color:var(--text-primary); margin:0;">Automated Release Queue
+              </h2>
+              <span class="chip chip-scheduled" id="scheduled-view-count">
+                <svg class="icon chip-icon">
+                  <use href="#i-clock" />
+                </svg>
+                <span id="scheduled-count-text">0 Scheduled</span>
+              </span>
+            </div>
+            <p class="muted small" style="margin-top:2px;">
+              Videos are pre-uploaded to YouTube as Private. YouTube cloud servers automatically publish them at the
+              specified time without requiring your computer to be running.
+            </p>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <a href="#/publish" class="btn btn-primary btn-sm">
+              <svg class="icon">
+                <use href="#i-clock" />
+              </svg>Schedule More Shorts
+            </a>
+          </div>
+        </div>
+
+        <div id="scheduled-grid-container" class="scheduled-grid">
+          <div class="muted" style="padding:40px; text-align:center; grid-column:1/-1;">Loading scheduled releases...
+          </div>
+        </div>
+      </section>
+
+      <!-- SUPABASE -->
+      <section class="view" data-view="supabase" hidden>
+        <!-- Top Project Status Card -->
+        <div class="card" style="padding:16px 20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div class="quick-icon" style="background:var(--accent-surface); color:var(--accent);"><svg class="icon">
+                  <use href="#i-database" />
+                </svg></div>
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <strong style="font-size:14px; font-weight:600;" id="sb-status-title">Supabase Cloud Database</strong>
+                  <span class="dot ok" id="sb-dot"></span>
+                </div>
+                <div class="muted small" id="sb-url" style="font-family:var(--font-mono); font-size:11.5px;">Loading
+                  project...</div>
+              </div>
+            </div>
+            <!-- Mode Switcher: Tables vs Storage -->
+            <div class="segmented" role="radiogroup" id="sb-mode-toggle" style="min-width:240px;">
+              <button type="button" role="radio" data-value="tables" aria-checked="true"><svg class="icon"
+                  style="margin-right:6px;">
+                  <use href="#i-database" />
+                </svg>Tables</button>
+              <button type="button" role="radio" data-value="storage" aria-checked="false"><svg class="icon"
+                  style="margin-right:6px;">
+                  <use href="#i-folder" />
+                </svg>Storage</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tables View Panel -->
+        <div id="sb-tables-panel" class="stack">
+          <div class="toolbar">
+            <div class="tabs" id="sb-table-tabs">
+              <button role="tab" data-table="shorts_metadata" aria-selected="true">shorts_metadata <span
+                  class="nav-badge" id="badge-shorts-meta" style="margin-left:6px;">–</span></button>
+              <button role="tab" data-table="video_series" aria-selected="false">video_series <span class="nav-badge"
+                  id="badge-video-series" style="margin-left:6px;">–</span></button>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <div class="segmented" role="radiogroup" id="sb-table-filter">
+                <button type="button" role="radio" data-filter="" aria-checked="true">All</button>
+                <button type="button" role="radio" data-filter="uploaded" aria-checked="false">Uploaded</button>
+                <button type="button" role="radio" data-filter="pending" aria-checked="false">Pending</button>
+              </div>
+              <label class="search">
+                <svg class="icon">
+                  <use href="#i-search" />
+                </svg>
+                <input type="search" id="sb-table-search" placeholder="Search rows...">
+              </label>
+              <button class="btn btn-ghost" id="sb-table-refresh" title="Refresh table"><svg class="icon">
+                  <use href="#i-refresh" />
+                </svg></button>
+            </div>
+          </div>
+
+          <div class="card flush" style="overflow-x:auto;">
+            <div id="sb-table-container">
+              <div class="muted" style="padding:40px; text-align:center;">Loading Supabase data...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Storage View Panel -->
+        <div id="sb-storage-panel" class="stack" style="display:none;">
+          <div class="toolbar">
+            <div class="tabs" id="sb-bucket-tabs">
+              <button role="tab" data-bucket="longform-videos" aria-selected="false"><svg class="icon"
+                  style="margin-right:6px;">
+                  <use href="#i-video" />
+                </svg>longform-videos</button>
+              <button role="tab" data-bucket="youtube-shorts" aria-selected="true"><svg class="icon"
+                  style="margin-right:6px;">
+                  <use href="#i-folder" />
+                </svg>youtube-shorts</button>
+              <button role="tab" data-bucket="livestream-shorts" aria-selected="false"><svg class="icon"
+                  style="margin-right:6px;">
+                  <use href="#i-folder" />
+                </svg>livestream-shorts</button>
+              <button role="tab" data-bucket="reels" aria-selected="false"><svg class="icon" style="margin-right:6px;">
+                  <use href="#i-folder" />
+                </svg>reels</button>
+            </div>
+            <button class="btn btn-ghost" id="sb-storage-refresh" title="Refresh files"><svg class="icon">
+                <use href="#i-refresh" />
+              </svg></button>
+          </div>
+
+          <!-- Breadcrumbs bar -->
+          <div class="card" style="padding:10px 16px;">
+            <div id="sb-breadcrumbs"
+              style="display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:12px; flex-wrap:wrap;">
+              <span class="muted">Path:</span>
+              <button class="link-btn active" data-path="" style="font-weight:600; cursor:pointer;">root</button>
+            </div>
+          </div>
+
+          <!-- Storage File/Folder List -->
+          <div class="card flush">
+            <ul class="rows" id="sb-storage-list">
+              <li class="muted" style="padding:40px; text-align:center;">Loading files...</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ACTIVITY -->
+      <section class="view" data-view="activity" hidden>
+        <div class="card flush">
+          <ul class="rows" id="activity-list"></ul>
+        </div>
+      </section>
+
+      <!-- SYSTEM -->
+      <section class="view" data-view="system" hidden>
+        <div class="split">
+          <div class="stack">
+            <div class="tool">
+              <span class="quick-icon"><svg class="icon">
+                  <use href="#i-shield" />
+                </svg></span>
+              <div><strong>Health check</strong><small>FFmpeg, Whisper, API keys, Supabase and GPU</small></div>
+              <button class="btn btn-ghost" data-run="doctor" id="sys-doctor">Run</button>
+            </div>
+            <div class="tool">
+              <span class="quick-icon"><svg class="icon">
+                  <use href="#i-key" />
+                </svg></span>
+              <div><strong>YouTube connection</strong><small>Verify channel login and upload access</small></div>
+              <button class="btn btn-ghost" data-run="auth" id="sys-auth">Run</button>
+            </div>
+            <div class="tool">
+              <span class="quick-icon"><svg class="icon">
+                  <use href="#i-trash" />
+                </svg></span>
+              <div><strong>Clean cache</strong><small>Free disk space. Finished Shorts are kept</small></div>
+              <button class="btn btn-ghost" data-run="clean" id="sys-clean">Run</button>
+            </div>
+          </div>
+          <div class="run-panel" data-kind="doctor,auth,clean" id="run-system"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Drawer -->
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-labelledby="drawer-title">
+    <div class="drawer-head">
+      <h2 id="drawer-title">Details</h2>
+      <button class="icon-btn" id="drawer-close" aria-label="Close"><svg class="icon">
+          <use href="#i-x" />
+        </svg></button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+
+  <!-- Video Player Modal -->
+  <div class="modal-backdrop" id="video-modal-backdrop" hidden>
+    <div class="video-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="video-modal-title">
+      <div class="modal-head">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+          <span class="chip chip-warn" id="video-modal-part">Part 1/3</span>
+          <h3 id="video-modal-title" class="truncate"
+            style="font-size:15px; font-weight:600; color:var(--text-primary);">Watch Short</h3>
+        </div>
+        <button class="icon-btn" id="video-modal-close" aria-label="Close video player">
+          <svg class="icon">
+            <use href="#i-x" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-video-wrap">
+        <video id="video-modal-player" controls autoplay playsinline></video>
+      </div>
+      <div class="modal-foot">
+        <div style="display:flex; align-items:center; gap:8px;" id="video-modal-meta">
+          <span class="chip chip-ok" id="video-modal-score">9/10 Score</span>
+          <span class="muted small" id="video-modal-duration">0:56</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="btn btn-ghost" id="video-modal-delete-btn" style="color:#ff4d4f;">
+            <svg class="icon">
+              <use href="#i-trash" />
+            </svg>Delete Short
+          </button>
+          <button class="btn btn-primary" id="video-modal-publish-btn">
+            <svg class="icon">
+              <use href="#i-youtube" />
+            </svg>Publish to YouTube
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-backdrop" id="delete-modal-backdrop" hidden>
+    <div class="confirm-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+      <div class="modal-head">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div
+            style="width:32px; height:32px; border-radius:50%; background:rgba(255,0,51,0.15); color:#ff0033; display:flex; align-items:center; justify-content:center;">
+            <svg class="icon">
+              <use href="#i-trash" />
+            </svg>
+          </div>
+          <h3 id="delete-modal-title" style="font-size:15px; font-weight:600; color:var(--text-primary);">Delete Short
+          </h3>
+        </div>
+        <button class="icon-btn" id="delete-modal-close" aria-label="Close">
+          <svg class="icon">
+            <use href="#i-x" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.5;">
+          Are you sure you want to delete <strong id="delete-modal-short-title" style="color:var(--text-primary);">this
+            Short</strong>?
+        </p>
+        <p class="muted small" style="margin-top:8px;">
+          This will permanently remove the Short from <strong>Supabase Cloud Storage</strong>, database records, and
+          local disk. You won't have to delete it manually in Supabase.
+        </p>
+      </div>
+      <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-ghost" id="delete-modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="delete-modal-confirm"
+          style="background:#ff0033; box-shadow:0 2px 12px rgba(255,0,51,0.4);">
+          <svg class="icon">
+            <use href="#i-trash" />
+          </svg>Delete from Supabase
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Selection Modal for Publishing -->
+  <div class="modal-backdrop" id="account-publish-modal-backdrop" hidden>
+    <div class="confirm-modal-dialog account-publish-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="account-publish-modal-title">
+      <div class="modal-head">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div
+            style="width:34px; height:34px; border-radius:50%; background:rgba(255,0,51,0.15); color:#ff0033; display:flex; align-items:center; justify-content:center;">
+            <svg class="icon">
+              <use href="#i-youtube" />
+            </svg>
+          </div>
+          <div>
+            <h3 id="account-publish-modal-title" style="font-size:15px; font-weight:600; color:var(--text-primary);">
+              Publish to YouTube</h3>
+            <p class="muted small" id="account-publish-modal-sub" style="margin-top:2px;">Select which channel to upload
+              to</p>
+          </div>
+        </div>
+        <button class="icon-btn" id="account-publish-modal-close" aria-label="Close modal">
+          <svg class="icon">
+            <use href="#i-x" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding:16px 20px;">
+        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
+          Choose target YouTube account for <strong id="account-publish-short-title"
+            style="color:var(--text-primary);">this Short</strong>:
+        </p>
+
+        <!-- Account Options Cards List -->
+        <div class="account-select-list" id="account-publish-options">
+          <!-- Dynamically populated from state.accounts -->
+        </div>
+
+        <!-- Timing & Scheduler Options -->
+        <div class="publish-schedule-box">
+          <div class="publish-section-heading">
+            <svg class="icon">
+              <use href="#i-clock" />
+            </svg>
+            <span>Release Schedule</span>
+          </div>
+          <div class="publish-timing-toggle" role="radiogroup" id="publish-timing-toggle">
+            <button type="button" class="timing-tab-btn active" data-timing="now" id="timing-btn-now">
+              <svg class="icon" style="width:14px; height:14px;">
+                <use href="#i-send" />
+              </svg>
+              <span>Publish Now (Public)</span>
+            </button>
+            <button type="button" class="timing-tab-btn" data-timing="schedule" id="timing-btn-schedule">
+              <svg class="icon" style="width:14px; height:14px;">
+                <use href="#i-clock" />
+              </svg>
+              <span>Schedule for Later</span>
+            </button>
+          </div>
+
+          <!-- Schedule Picker Container (shown when schedule is active) -->
+          <div id="publish-schedule-details" class="publish-schedule-details" style="display:none;">
+            <div class="field" style="margin-bottom:6px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span class="field-label" style="font-size:12px; margin:0;">Release Date &amp; Time (Local)</span>
+                <span id="schedule-relative-preview" style="font-size:11px; font-weight:500; color:#c4b5fd;"></span>
+              </div>
+              <input type="datetime-local" id="account-publish-datetime" class="input schedule-datetime-input">
+            </div>
+
+            <!-- Quick Presets -->
+            <div style="display:flex; flex-direction:column; gap:5px;">
+              <span class="muted small" style="font-size:11px;">Quick presets:</span>
+              <div class="schedule-presets" id="schedule-preset-buttons">
+                <button type="button" class="preset-pill" data-hours="1">+1 Hour</button>
+                <button type="button" class="preset-pill" data-hours="3">+3 Hours</button>
+                <button type="button" class="preset-pill" data-preset="tomorrow-9am">Tomorrow 9 AM</button>
+                <button type="button" class="preset-pill" data-preset="tomorrow-6pm">Tomorrow 6 PM</button>
+              </div>
+            </div>
+
+            <div class="schedule-offline-note">
+              <svg class="icon">
+                <use href="#i-cloud" />
+              </svg>
+              <div>
+                <strong>100% Offline Release Guarantee</strong>
+                <div style="margin-top:2px; opacity:0.85;">Pre-uploaded directly to YouTube cloud servers as Private. YouTube will automatically publish it at the scheduled time even when your computer is off.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <label class="account-select-remember">
+          <input type="checkbox" id="account-publish-set-active" checked>
+          <span>Keep this account as default for future uploads</span>
+        </label>
+      </div>
+      <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-ghost" id="account-publish-cancel">Cancel</button>
+        <button class="btn btn-primary" id="account-publish-confirm">
+          <svg class="icon" id="account-publish-confirm-icon">
+            <use href="#i-send" />
+          </svg><span id="account-publish-confirm-text">Confirm &amp; Upload</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide-In Terminal Drawer (Pop-in & Pop-out) -->
+  <div class="terminal-drawer-scrim" id="terminal-drawer-scrim"></div>
+  <aside class="terminal-drawer" id="terminal-drawer" aria-label="Pipeline Live Terminal">
+    <div class="terminal-drawer-header">
+      <div class="terminal-drawer-title-group">
+        <div class="terminal-drawer-icon">
+          <svg class="icon">
+            <use href="#i-terminal" />
+          </svg>
+        </div>
+        <div>
+          <div class="terminal-drawer-heading">
+            <h3 id="terminal-drawer-title">Pipeline Terminal</h3>
+            <span class="chip chip-sm" id="terminal-drawer-chip">idle</span>
+          </div>
+          <p id="terminal-drawer-subtitle" class="muted small">Live stdout stream from pipeline runner</p>
+        </div>
+      </div>
+      <div class="terminal-drawer-controls">
+        <button type="button" class="btn btn-ghost btn-icon" id="terminal-drawer-copy" title="Copy logs to clipboard">
+          <svg class="icon">
+            <use href="#i-copy" />
+          </svg>
+        </button>
+        <button type="button" class="btn btn-danger btn-sm" id="terminal-drawer-stop-btn" title="Stop current process">
+          <svg class="icon">
+            <use href="#i-stop" />
+          </svg><span>Stop</span>
+        </button>
+        <button type="button" class="btn btn-ghost btn-icon" id="terminal-drawer-close" title="Close drawer (Esc)">
+          <svg class="icon">
+            <use href="#i-x" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active 3-word status bar inside drawer -->
+    <div class="terminal-drawer-status-bar">
+      <div class="terminal-drawer-status-left">
+        <span class="status-pulse-ring" id="terminal-drawer-pulse-ring"></span>
+        <span id="terminal-drawer-3words">Ingesting Video Audio...</span>
+      </div>
+      <span id="terminal-drawer-pct" class="terminal-drawer-pct">14%</span>
+    </div>
+
+    <!-- Pipeline stages flow in drawer -->
+    <div class="stages-flow" id="terminal-drawer-stages"></div>
+
+    <!-- Live console stream in drawer -->
+    <div class="terminal-drawer-console-wrap">
+      <div class="console" id="terminal-drawer-console"></div>
+    </div>
+  </aside>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="/app.js?v=44"></script>
+</body>
+
+</html>
