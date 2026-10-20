@@ -57,6 +57,7 @@ class Settings:
     TRANSCRIPTS_DIR: Path = OUTPUT_DIR / "transcripts"
     CLIPS_DIR: Path = OUTPUT_DIR / "clips"
     SUBTITLES_DIR: Path = OUTPUT_DIR / "subtitles"
+    LIVESTREAM_AGENT_DIR: Path = OUTPUT_DIR / "livestream_agent"
 
     # API Keys
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
@@ -70,6 +71,7 @@ class Settings:
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     SUPABASE_STORAGE_BUCKET: str = os.getenv("SUPABASE_STORAGE_BUCKET", "reels")
     SUPABASE_SHORTS_BUCKET: str = os.getenv("SUPABASE_SHORTS_BUCKET", "youtube-shorts")
+    SUPABASE_LIVESTREAM_SHORTS_BUCKET: str = os.getenv("SUPABASE_LIVESTREAM_SHORTS_BUCKET", "livestream-shorts")
 
     # YouTube API OAuth Configuration
     YOUTUBE_CLIENT_SECRETS_FILE: str = os.getenv(
@@ -89,7 +91,7 @@ class Settings:
     @classmethod
     def ensure_directories(cls) -> None:
         """Create necessary working directory tree if missing."""
-        for directory in [cls.OUTPUT_DIR, cls.DOWNLOADS_DIR, cls.AUDIO_DIR, cls.TRANSCRIPTS_DIR, cls.CLIPS_DIR, cls.SUBTITLES_DIR]:
+        for directory in [cls.OUTPUT_DIR, cls.DOWNLOADS_DIR, cls.AUDIO_DIR, cls.TRANSCRIPTS_DIR, cls.CLIPS_DIR, cls.SUBTITLES_DIR, cls.LIVESTREAM_AGENT_DIR]:
             directory.mkdir(parents=True, exist_ok=True)
 
 

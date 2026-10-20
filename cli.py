@@ -171,12 +171,24 @@ from src.utils import generate_short_filename, slice_transcription
     "--single-clip",
     is_flag=True,
     default=False,
-    help="Extract peak moments as single continuous uninterrupted clips without multi-cut jump-cuts.",
+    help="Extract peak moments as single continuous uninterrupted clips (default behavior).",
+)
+@click.option(
+    "--multi-cut",
+    is_flag=True,
+    default=False,
+    help="Enable experimental multi-cut jump-cuts to skip lulls (default: single continuous clip).",
 )
 @click.option(
     "--bleep-profanity / --no-bleep-profanity",
     default=True,
     help="Automatically detect English swear words and censor with standard 1000Hz bleeps.",
+)
+@click.option(
+    "--monitor-stream",
+    is_flag=True,
+    default=False,
+    help="Launch autonomous live stream monitoring agent to continuously monitor live broadcast and clip into isolated bucket.",
 )
 def run_pipeline(
     url: Optional[str],
@@ -199,9 +211,29 @@ def run_pipeline(
     captions: bool,
     no_subtitles: bool,
     single_clip: bool,
+    multi_cut: bool,
     bleep_profanity: bool,
+    monitor_stream: bool,
 ) -> None:
     """Run full automated YouTube Shorts pipeline end-to-end."""
+    if monitor_stream:
+        if not url:
+            console.print("[bold red]Error:[/bold red] Missing required option '--url' for live stream monitoring.")
+            sys.exit(1)
+        from src.services.stream_monitor import StreamMonitorAgent
+        agent = StreamMonitorAgent(
+            target_url=url,
+            chunk_duration=150,
+            crop_mode=crop_mode.lower(),
+            bleep_profanity=bleep_profanity,
+            auto_upload=auto_upload,
+            llm_provider=llm_provider.lower(),
+            llm_model=llm_model,
+            whisper_model=model_size.lower(),
+        )
+        agent.run_autonomous_monitor()
+        return
+
     if doctor:
         from src.doctor import run_system_doctor
         run_system_doctor()
@@ -229,155 +261,8 @@ def run_pipeline(
         return
 
     if upload_pending or upload_all_pending:
-        from rich.table import Table
-
-        print_banner()
-        log_stage(6, "Pending Shorts Auto-Uploader", "Selecting unuploaded video from Supabase / database")
-
-        db_service = DatabaseService()
-        uploader = YouTubeUploaderService()
-
-        # Check quota first
-        quota = db_service.get_daily_quota_status()
-        if not quota["can_upload"]:
-            log_warning(
-                "ORCHESTRATOR",
-                f"⛔ YouTube Upload Quota Limit Reached ({quota['units_used']}/{quota['max_daily_units']} units used today).\n"
-                f"   Cannot upload pending Shorts right now. Try again tomorrow after midnight PST.",
-            )
-            return
-
-        # Fetch pending Shorts
-        limit = 10 if upload_all_pending else 1
-        pending = db_service.get_pending_shorts(limit=limit)
-
-        if not pending:
-            console.print("\n[bold green]🎉 No pending Shorts to upload![/bold green] All Shorts in Supabase & local DB are already uploaded to YouTube.\n")
-            return
-
-        log_info("ORCHESTRATOR", f"Found {len(pending)} pending Short(s) queued for upload.")
-
-        uploaded_records = []
-        for idx, item in enumerate(pending):
-            # Check quota before each item
-            curr_quota = db_service.get_daily_quota_status()
-            if not curr_quota["can_upload"]:
-                log_warning("ORCHESTRATOR", "Daily YouTube upload quota reached. Halting remaining pending uploads.")
-                break
-
-            part_num = item.get("part_number", 1)
-            total_parts = item.get("total_parts", 1)
-            source_vid = item.get("source_video_id", "video")
-            title = item.get("hook_title", f"Short Part {part_num}")
-            part_str = f"Part {part_num}/{total_parts}" if total_parts > 1 else "Short"
-
-            log_info("ORCHESTRATOR", f"\n[bold cyan]Uploading [{idx+1}/{len(pending)}]: {part_str} - {title}[/bold cyan]")
-
-            # Resolve video file path (Cloud-First, Local Fallback)
-            video_file_path = None
-            storage_url = item.get("storage_url")
-
-            # PRIMARY: Cloud Storage (Supabase)
-            if storage_url and not storage_url.startswith("https://example.com") and "#" not in storage_url:
-                target_dest = str(settings.OUTPUT_DIR / f"cloud_{source_vid}_part{part_num}.mp4")
-                log_info("ORCHESTRATOR", f"☁️ [CLOUD-FIRST] Fetching video from Supabase Storage: {storage_url}")
-                video_file_path = db_service.download_from_storage(storage_url, target_dest)
-
-            # FALLBACK: Local Disk (if cloud download unavailable)
-            if not video_file_path or not Path(video_file_path).exists() or Path(video_file_path).stat().st_size <= 1024:
-                loc_path = item.get("local_path")
-                if loc_path and Path(loc_path).exists() and Path(loc_path).stat().st_size > 1024:
-                    video_file_path = str(loc_path)
-                    log_info("ORCHESTRATOR", f"💾 [LOCAL FALLBACK] Using existing local video file: {video_file_path}")
-                else:
-                    import re
-                    clean_title = re.sub(r'[^a-zA-Z0-9]', '', title.lower().replace("shorts", ""))
-                    for f in settings.OUTPUT_DIR.glob("*.mp4"):
-                        f_name_lower = f.name.lower()
-                        f_stem_clean = re.sub(r'[^a-zA-Z0-9]', '', f.stem.lower())
-                        if (source_vid and source_vid.lower() in f_name_lower and f"part{part_num}" in f_name_lower) or \
-                           (clean_title and len(clean_title) >= 10 and clean_title[:15] in f_stem_clean):
-                            video_file_path = str(f)
-                            log_info("ORCHESTRATOR", f"💾 [LOCAL FALLBACK] Found matching video file in output: {video_file_path}")
-                            break
-
-            if not video_file_path or not Path(video_file_path).exists():
-                log_error("ORCHESTRATOR", f"Could not find video file on cloud storage or local disk for {title}. Skipping.")
-                continue
-
-            # Parse tags
-            raw_tags = item.get("tags", [])
-            if isinstance(raw_tags, str):
-                tags_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
-            elif isinstance(raw_tags, list):
-                tags_list = raw_tags
-            else:
-                tags_list = ["Shorts", "Viral"]
-
-            clip_obj = ViralClip(
-                start_time=float(item.get("start_time") or 0.0),
-                end_time=float(item.get("end_time") or 50.0),
-                hook_title=title,
-                hook_score=float(item.get("hook_score") or 90.0),
-                viral_reasoning=item.get("viral_reasoning") or "Pending upload",
-                description=item.get("description") or f"{title} #Shorts",
-                tags=tags_list,
-            )
-
-            # Avoid duplicates
-            existing_yt_id = db_service.check_existing_upload(
-                source_video_id=source_vid,
-                start_time=clip_obj.start_time,
-                end_time=clip_obj.end_time,
-                title=clip_obj.hook_title,
-            )
-            if existing_yt_id:
-                log_warning("ORCHESTRATOR", f"⏭️ Duplicate detected! Already uploaded to YouTube: {existing_yt_id}")
-                db_service.mark_short_uploaded(item.get("id"), source_vid, part_num, existing_yt_id)
-                uploaded_records.append({
-                    "part": part_str,
-                    "title": title,
-                    "status": "⏭️ Duplicate (Live)",
-                    "youtube": f"https://www.youtube.com/shorts/{existing_yt_id}",
-                })
-                continue
-
-            # Perform YouTube upload
-            yt_id = uploader.upload_short(video_path=video_file_path, clip=clip_obj)
-            if yt_id:
-                yt_url = f"https://www.youtube.com/shorts/{yt_id}"
-                db_service.mark_short_uploaded(item.get("id"), source_vid, part_num, yt_id)
-                uploaded_records.append({
-                    "part": part_str,
-                    "title": title,
-                    "status": "[bold green]✅ Confirmed Uploaded[/bold green]",
-                    "youtube": yt_url,
-                })
-                log_success("ORCHESTRATOR", f"Successfully published {part_str} -> {yt_url}")
-            else:
-                uploaded_records.append({
-                    "part": part_str,
-                    "title": title,
-                    "status": "[bold red]❌ Failed[/bold red]",
-                    "youtube": "N/A",
-                })
-
-            if not upload_all_pending:
-                break
-
-        # Summary Table
-        pub_table = Table(title="🚀 Standalone Upload Summary", style="bold cyan", header_style="bold magenta")
-        pub_table.add_column("Part", style="bold yellow", justify="center")
-        pub_table.add_column("Title", style="bold white")
-        pub_table.add_column("Status", justify="center")
-        pub_table.add_column("YouTube Link", style="bold underline blue")
-
-        for r in uploaded_records:
-            pub_table.add_row(r["part"], r["title"], r["status"], r["youtube"])
-
-        console.print()
-        console.print(pub_table)
-        console.print()
+        from upload_pending import run_pending_upload
+        run_pending_upload(upload_all=upload_all_pending)
         return
 
     if not url:
@@ -477,7 +362,7 @@ def run_pipeline(
                 log_warning("ORCHESTRATOR", f"No dialogue detected in {part_label}. Skipping...")
                 continue
 
-            allow_cuts = not (is_stream_video or single_clip)
+            allow_cuts = bool(multi_cut and not is_stream_video and not single_clip)
             viral_clip = viral_detector.detect_viral_moment(
                 window_transcript,
                 allow_multi_cut=allow_cuts,

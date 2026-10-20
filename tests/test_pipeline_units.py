@@ -627,3 +627,199 @@ def test_profanity_filter_and_bleeping():
     assert 2.9 <= intervals[1][0] <= 3.0
 
 
+def test_sentence_boundary_snapping_avoids_dangling_mid_sentence():
+    from src.services.viral_detector import ViralDetectorService
+    from src.models import FullTranscription, TranscriptionSegment, WordTimestamp
+
+    detector = ViralDetectorService.__new__(ViralDetectorService)
+
+    # Narrative with a completed punchline at 45.0s, followed by an incomplete thought with dangling "because" at 50.0s
+    words = [
+        WordTimestamp(word="I", start=0.0, end=0.3),
+        WordTimestamp(word="discovered", start=0.4, end=1.0),
+        WordTimestamp(word="the", start=1.1, end=1.3),
+        WordTimestamp(word="biggest", start=1.4, end=1.8),
+        WordTimestamp(word="secret", start=1.9, end=2.4),
+        WordTimestamp(word="ever.", start=2.5, end=3.0),
+    ]
+    # Filler dialogue spanning up to 43.0s
+    for i in range(1, 40):
+        words.append(WordTimestamp(word=f"detail{i}", start=3.0 + i, end=3.8 + i))
+
+    # Sentence finishing at 45.0s
+    words.append(WordTimestamp(word="And", start=43.5, end=43.8))
+    words.append(WordTimestamp(word="we", start=43.9, end=44.1))
+    words.append(WordTimestamp(word="finally", start=44.2, end=44.6))
+    words.append(WordTimestamp(word="escaped!", start=44.7, end=45.3))  # Clean sentence finish with '!'
+
+    # Dangling next sentence starting at 47.0s
+    words.append(WordTimestamp(word="Then", start=47.0, end=47.3))
+    words.append(WordTimestamp(word="he", start=47.4, end=47.6))
+    words.append(WordTimestamp(word="screamed", start=47.7, end=48.2))
+    words.append(WordTimestamp(word="because", start=48.3, end=48.9))  # Dangling conjunction!
+    words.append(WordTimestamp(word="the", start=49.0, end=49.3))      # Mid-sentence article!
+    words.append(WordTimestamp(word="giant", start=49.4, end=50.0))
+
+    transcription = FullTranscription(
+        language="en",
+        language_probability=0.99,
+        duration=60.0,
+        segments=[TranscriptionSegment(id=0, start=0.0, end=50.0, text="test story", words=words)],
+        total_words=len(words),
+    )
+
+    # LLM raw end was 49.0s (right on dangling "because")
+    snapped_start, snapped_end = detector.snap_to_word_boundaries(
+        raw_start=0.0,
+        raw_end=49.0,
+        transcription=transcription,
+        total_duration=60.0,
+        max_duration=59.0,
+    )
+
+    # Snapped end MUST NOT end on "because" or "the" mid-sentence; it should snap cleanly to "escaped!"
+    assert snapped_start == 0.0
+    # "escaped!" ended at 45.3s + natural release padding (~0.18s) = ~45.48s
+    assert 45.0 <= snapped_end <= 46.0
+
+
+def test_vocal_release_decay_padding():
+    from src.services.viral_detector import ViralDetectorService
+    from src.models import FullTranscription, TranscriptionSegment, WordTimestamp
+
+    detector = ViralDetectorService.__new__(ViralDetectorService)
+
+    words = [
+        WordTimestamp(word="Start", start=1.0, end=1.5),
+        WordTimestamp(word="talking", start=1.6, end=2.0),
+    ]
+    for i in range(1, 35):
+        words.append(WordTimestamp(word=f"filler{i}", start=2.0 + i, end=2.8 + i))
+    # Final word with a period at 40.0s, followed by silence (next word at 45.0s)
+    words.append(WordTimestamp(word="perfect.", start=39.5, end=40.0))
+    words.append(WordTimestamp(word="Later", start=45.0, end=45.5))
+
+    transcription = FullTranscription(
+        language="en",
+        language_probability=0.99,
+        duration=60.0,
+        segments=[TranscriptionSegment(id=0, start=1.0, end=45.5, text="test", words=words)],
+        total_words=len(words),
+    )
+
+    snapped_start, snapped_end = detector.snap_to_word_boundaries(
+        raw_start=1.0,
+        raw_end=40.0,
+        transcription=transcription,
+        total_duration=60.0,
+        max_duration=59.0,
+    )
+
+    # End should be strictly greater than 40.0 (contains +0.15s to +0.18s natural acoustic release padding)
+    assert snapped_end > 40.0
+    assert snapped_end <= 40.25
+
+
+def test_livestream_agent_dedicated_bucket_isolation(tmp_path: Path):
+    from src.services.database import DatabaseService
+    from src.config import settings
+
+    db = DatabaseService.__new__(DatabaseService)
+    db.url = "https://mock.supabase.co"
+    db.key = "mock_key"
+    db.bucket_name = "youtube-shorts"
+    db.livestream_bucket_name = "livestream-shorts"
+
+    # Verify bucket name settings isolation
+    assert db.livestream_bucket_name == "livestream-shorts"
+    assert db.livestream_bucket_name != db.bucket_name
+    assert db.livestream_bucket_name != "reels"
+
+    # Mock storage client to verify that upload_livestream_agent_short targets ONLY livestream-shorts
+    class MockStorageTarget:
+        def __init__(self, bucket_name):
+            self.bucket_name = bucket_name
+            self.uploaded_files = []
+
+        def upload(self, path, file, file_options=None):
+            self.uploaded_files.append((path, len(file)))
+            return {"Key": path}
+
+        def get_public_url(self, path):
+            return f"https://mock.supabase.co/storage/v1/object/public/{self.bucket_name}/{path}"
+
+    class MockSupabaseClient:
+        def __init__(self):
+            self.storage_instances = {}
+
+        @property
+        def storage(self):
+            class StorageHelper:
+                def __init__(self, parent):
+                    self.parent = parent
+
+                def from_(self, bucket_name):
+                    if bucket_name not in self.parent.storage_instances:
+                        self.parent.storage_instances[bucket_name] = MockStorageTarget(bucket_name)
+                    return self.parent.storage_instances[bucket_name]
+
+                def list_buckets(self):
+                    class MockBucket:
+                        def __init__(self, name):
+                            self.name = name
+                    return [MockBucket("reels"), MockBucket("youtube-shorts"), MockBucket("livestream-shorts")]
+
+                def create_bucket(self, name, options=None):
+                    return {"name": name}
+
+            return StorageHelper(self)
+
+    mock_client = MockSupabaseClient()
+    db.client = mock_client
+
+    # Create dummy video file
+    dummy_video = tmp_path / "live_clip_1080x1920.mp4"
+    dummy_video.write_bytes(b"dummy video content for livestream short")
+
+    # Upload via upload_livestream_agent_short
+    url = db.upload_livestream_agent_short(str(dummy_video))
+
+    # Strict isolation assertions:
+    # 1. Returned URL must contain 'livestream-shorts'
+    assert url is not None
+    assert "livestream-shorts" in url
+    assert "youtube-shorts" not in url
+    assert "reels" not in url
+
+    # 2. Mock storage instance for 'livestream-shorts' must have received the upload
+    assert "livestream-shorts" in mock_client.storage_instances
+    assert len(mock_client.storage_instances["livestream-shorts"].uploaded_files) == 1
+
+    # 3. 'youtube-shorts' and 'reels' must NOT have received any uploads
+    assert "youtube-shorts" not in mock_client.storage_instances
+    assert "reels" not in mock_client.storage_instances
+
+
+def test_stream_monitor_agent_instantiation():
+    from src.services.stream_monitor import StreamMonitorAgent
+    from src.config import settings
+
+    agent = StreamMonitorAgent.__new__(StreamMonitorAgent)
+    agent.target_url = "https://www.youtube.com/@LofiGirl/live"
+    agent.chunk_duration = 150
+    agent.poll_interval = 45
+    agent.crop_mode = "blurred_background"
+    agent.bleep_profanity = True
+    agent.auto_upload = False
+    agent.max_clips = 5
+    agent.agent_dir = settings.LIVESTREAM_AGENT_DIR
+
+    assert agent.target_url == "https://www.youtube.com/@LofiGirl/live"
+    assert agent.chunk_duration == 150
+    assert agent.poll_interval == 45
+    assert agent.max_clips == 5
+    assert agent.crop_mode == "blurred_background"
+
+
+
+

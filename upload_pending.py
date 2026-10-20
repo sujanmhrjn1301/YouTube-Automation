@@ -36,9 +36,9 @@ from src.services.database import DatabaseService
 from src.services.youtube_uploader import YouTubeUploaderService
 
 
-def main() -> None:
+def run_pending_upload(upload_all: bool = False) -> None:
     print_banner()
-    log_stage(6, "Autonomous Pending Uploader", "Selecting next unuploaded Short from Supabase / database")
+    log_stage(6, "Autonomous Pending Uploader", "Selecting unuploaded Short from Supabase / database")
 
     db_service = DatabaseService()
     uploader = YouTubeUploaderService()
@@ -59,7 +59,7 @@ def main() -> None:
         console.print("\n[bold green]🎉 No pending Shorts to upload![/bold green] All stored Shorts are already live on YouTube.\n")
         return
 
-    uploaded_one = False
+    uploaded_records = []
     for item in pending:
         part_num = item.get("part_number", 1)
         total_parts = item.get("total_parts", 1)
@@ -79,7 +79,7 @@ def main() -> None:
             log_info("UPLOADER", f"☁️ [CLOUD-FIRST] Fetching video from Supabase Storage: {storage_url}")
             video_file_path = db_service.download_from_storage(storage_url, target_dest)
 
-        # FALLBACK: Local Disk (if cloud download unavailable or storage_url not present)
+        # FALLBACK: Local Disk
         if not video_file_path or not Path(video_file_path).exists() or Path(video_file_path).stat().st_size <= 1024:
             loc_path = item.get("local_path")
             if loc_path and Path(loc_path).exists() and Path(loc_path).stat().st_size > 1024:
@@ -130,7 +130,12 @@ def main() -> None:
         if existing_yt_id:
             log_warning("UPLOADER", f"⏭️ Duplicate detected! Already uploaded to YouTube: {existing_yt_id}")
             db_service.mark_short_uploaded(item.get("id"), source_vid, part_num, existing_yt_id)
-            console.print(f"[bold yellow]Video is already live on YouTube:[/bold yellow] https://www.youtube.com/shorts/{existing_yt_id}\n")
+            uploaded_records.append({
+                "part": part_str,
+                "title": title,
+                "status": "⏭️ Duplicate (Live)",
+                "youtube": f"https://www.youtube.com/shorts/{existing_yt_id}",
+            })
             continue
 
         # 6. Perform Upload
@@ -140,31 +145,42 @@ def main() -> None:
         if yt_id:
             yt_url = f"https://www.youtube.com/shorts/{yt_id}"
             db_service.mark_short_uploaded(item.get("id"), source_vid, part_num, yt_id)
-
-            # 7. Rich Summary Table
-            pub_table = Table(title="🚀 Upload Completed Successfully", style="bold green", header_style="bold magenta")
-            pub_table.add_column("Part", style="bold yellow", justify="center")
-            pub_table.add_column("Title", style="bold white")
-            pub_table.add_column("Status", justify="center")
-            pub_table.add_column("YouTube Link", style="bold underline blue")
-
-            pub_table.add_row(
-                part_str,
-                title,
-                "[bold green]✅ Confirmed Uploaded[/bold green]",
-                yt_url,
-            )
-
-            console.print()
-            console.print(pub_table)
-            console.print()
-            uploaded_one = True
-            break
+            uploaded_records.append({
+                "part": part_str,
+                "title": title,
+                "status": "[bold green]✅ Confirmed Uploaded[/bold green]",
+                "youtube": yt_url,
+            })
+            log_success("UPLOADER", f"Successfully published {part_str} -> {yt_url}")
         else:
-            log_error("UPLOADER", f"Upload failed for {title}. Checking next...")
+            uploaded_records.append({
+                "part": part_str,
+                "title": title,
+                "status": "[bold red]❌ Failed[/bold red]",
+                "youtube": "N/A",
+            })
 
-    if not uploaded_one:
+        if not upload_all:
+            break
+
+    # Summary Table
+    if uploaded_records:
+        pub_table = Table(title="🚀 Standalone Upload Summary", style="bold cyan", header_style="bold magenta")
+        pub_table.add_column("Part", style="bold yellow", justify="center")
+        pub_table.add_column("Title", style="bold white")
+        pub_table.add_column("Status", justify="center")
+        pub_table.add_column("YouTube Link", style="bold underline blue")
+        for r in uploaded_records:
+            pub_table.add_row(r["part"], r["title"], r["status"], r["youtube"])
+        console.print()
+        console.print(pub_table)
+        console.print()
+    else:
         console.print("\n[bold yellow]No valid pending video files ready for upload at this time.[/bold yellow]\n")
+
+
+def main() -> None:
+    run_pending_upload(upload_all=False)
 
 
 if __name__ == "__main__":
