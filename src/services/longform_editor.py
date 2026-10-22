@@ -534,7 +534,9 @@ class LongformVideoEditor:
         url: str,
         focus_timestamp: float = 4210.0,
         target_runtime_sec: int = 480,
-        progress_cb: Optional[Any] = None
+        progress_cb: Optional[Any] = None,
+        prompt: Optional[str] = None,
+        search_engine: str = "both",
     ) -> Dict[str, Any]:
         """
         Complete end-to-end execution of the 7-9 minute Longform Video Editor Agent.
@@ -547,6 +549,23 @@ class LongformVideoEditor:
 
         stream_meta = self.get_stream_metadata(url)
         log_info("LONGFORM_EDITOR", f"VOD: {stream_meta['title']} ({stream_meta['duration']:.0f}s total)")
+
+        if prompt and prompt.strip():
+            try:
+                from src.services.scene_search import SceneSearchService
+                searcher = SceneSearchService()
+                scenes = searcher.find_scenes(
+                    prompt=prompt.strip(),
+                    search_engine=search_engine,
+                    video_url_or_path=url,
+                    total_duration=stream_meta["duration"],
+                    top_k=1,
+                )
+                if scenes:
+                    focus_timestamp = scenes[0]["start"]
+                    log_info("LONGFORM_EDITOR", f"AI matched scene focus timestamp: {focus_timestamp:.1f}s ({scenes[0].get('label', '')})")
+            except Exception as e:
+                log_warning("LONGFORM_EDITOR", f"Scene search error: {e}")
 
         if progress_cb:
             progress_cb("Constructing 6-Act High-Retention Narrative Storyboard...", 0.15)
@@ -585,8 +604,40 @@ class LongformVideoEditor:
                     with open(meta_file, "w", encoding="utf-8") as f:
                         json.dump(metadata, f, indent=2)
                     log_success("LONGFORM_EDITOR", f"Feature Video synced to Supabase [{db.longform_bucket_name}]: {storage_url}")
+
+                # Register in database so feature appears in Pending Uploads
+                from src.models import ViralClip, VideoMetadata
+                lf_clip = ViralClip(
+                    start_time=0.0,
+                    end_time=float(metadata.get("duration_seconds", 480.0)),
+                    hook_title=metadata.get("title", stream_meta.get("title", "Feature Video")),
+                    hook_score=10,
+                    description=metadata.get("description", ""),
+                    tags=metadata.get("tags", ["feature", "longform"]),
+                    viral_reasoning=f"High-retention 6-act narrative feature video edited from '{stream_meta.get('title', '')}'."
+                )
+                lf_video_meta = VideoMetadata(
+                    video_id=stream_meta.get("video_id", "feature"),
+                    title=stream_meta.get("title", "Live Stream Feature"),
+                    author=stream_meta.get("author", "Creator"),
+                    duration=float(metadata.get("duration_seconds", 480.0)),
+                    resolution="1920x1080",
+                    filesize_mb=float(metadata.get("file_size_mb", 0.0)),
+                    was_live=True
+                )
+                db.save_clip_record(
+                    source_url=stream_meta.get("url", stream_meta.get("live_url", "")),
+                    video_meta=lf_video_meta,
+                    clip=lf_clip,
+                    storage_url=metadata.get("storage_url"),
+                    local_path=str(final_video),
+                    youtube_id=None,
+                    part_number=1,
+                    total_parts=1,
+                    is_confirmed=False
+                )
         except Exception as e:
-            log_warning("LONGFORM_EDITOR", f"Supabase storage upload note: {e}")
+            log_warning("LONGFORM_EDITOR", f"Database registration note: {e}")
 
         if progress_cb:
             progress_cb(f"Completed! 7-9m Feature Ready: {metadata['duration_formatted']} ({metadata['file_size_mb']} MB)", 1.0)

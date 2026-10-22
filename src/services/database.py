@@ -305,11 +305,18 @@ class DatabaseService:
             log_error("DATABASE", f"File not found for storage upload: {file_path}")
             return None
 
-        target_bucket = bucket_name or self.bucket_name
-        is_post_live = bool(is_post_livestream or is_livestream)
+        # Determine target bucket and folder
+        if is_livestream:
+            target_bucket = bucket_name or self.livestream_bucket_name  # 'livestream-shorts'
+            folder = "shorts/livestreams_clips"
+        elif is_post_livestream:
+            target_bucket = bucket_name or self.bucket_name  # 'youtube-shorts'
+            folder = "shorts/post_livestreams"
+        else:
+            target_bucket = bucket_name or self.bucket_name  # 'youtube-shorts'
+            folder = "shorts/standard"
 
         if not remote_filename:
-            folder = "shorts/post_livestreams" if is_post_live else "shorts/standard"
             stem = path_obj.stem.replace("[", "").replace("]", "").replace(" ", "_")
             safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', stem)
             safe_stem = re.sub(r'_+', '_', safe_stem).strip('_')
@@ -624,11 +631,18 @@ class DatabaseService:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE shorts_metadata
-                SET is_confirmed_uploaded = 1, confirmed_at = ?, youtube_id = ?, scheduled_publish_at = ?
-                WHERE id = ?
-            """, (now_iso, youtube_id, scheduled_at, short_id))
+            try:
+                cursor.execute("""
+                    UPDATE shorts_metadata
+                    SET is_confirmed_uploaded = 1, confirmed_at = ?, youtube_id = ?, scheduled_publish_at = ?
+                    WHERE id = ?
+                """, (now_iso, youtube_id, scheduled_at, short_id))
+            except Exception:
+                cursor.execute("""
+                    UPDATE shorts_metadata
+                    SET is_confirmed_uploaded = 1, confirmed_at = ?, youtube_id = ?
+                    WHERE id = ?
+                """, (now_iso, youtube_id, short_id))
             cursor.execute("""
                 UPDATE video_series
                 SET is_confirmed = 1, confirmed_at = ?, youtube_id = ?, youtube_url = ?
@@ -681,14 +695,19 @@ class DatabaseService:
 
         max_daily_units = 10000
         cost_per_upload = 1600
+        min_daily_uploads = 6
         remaining = max(0, max_daily_units - units_used)
-        can_upload = (units_used + cost_per_upload) <= max_daily_units
+        target_met = uploads_today >= min_daily_uploads
+        # Allow uploads beyond 6 as long as quota units remain (1600 per video upload)
+        can_upload = remaining >= cost_per_upload
 
         return {
             "date": today_str,
             "units_used": units_used,
             "remaining_units": remaining,
             "uploads_today": uploads_today,
+            "min_daily_uploads": min_daily_uploads,
+            "target_met": target_met,
             "can_upload": can_upload,
             "max_daily_units": max_daily_units,
         }
@@ -866,17 +885,30 @@ class DatabaseService:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE shorts_metadata
-                SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?, scheduled_publish_at = ?
-                WHERE id = ? OR (source_video_id = ? AND part_number = ?)
-            """, (youtube_id, now_iso, scheduled_at, record_id, source_video_id, part_number))
+            try:
+                cursor.execute("""
+                    UPDATE shorts_metadata
+                    SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?, scheduled_publish_at = ?
+                    WHERE id = ? OR (source_video_id = ? AND part_number = ?)
+                """, (youtube_id, now_iso, scheduled_at, record_id, source_video_id, part_number))
+            except Exception:
+                cursor.execute("""
+                    UPDATE shorts_metadata
+                    SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?
+                    WHERE id = ? OR (source_video_id = ? AND part_number = ?)
+                """, (youtube_id, now_iso, record_id, source_video_id, part_number))
             if cursor.rowcount == 0:
                 s_url = f"https://www.youtube.com/watch?v={source_video_id}" if source_video_id else ""
-                cursor.execute("""
-                    INSERT INTO shorts_metadata (id, source_url, source_video_id, part_number, youtube_id, is_confirmed_uploaded, confirmed_at, scheduled_publish_at, created_at)
-                    VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
-                """, (record_id, s_url, source_video_id, part_number, youtube_id, now_iso, scheduled_at, now_iso))
+                try:
+                    cursor.execute("""
+                        INSERT INTO shorts_metadata (id, source_url, source_video_id, part_number, youtube_id, is_confirmed_uploaded, confirmed_at, scheduled_publish_at, created_at)
+                        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+                    """, (record_id, s_url, source_video_id, part_number, youtube_id, now_iso, scheduled_at, now_iso))
+                except Exception:
+                    cursor.execute("""
+                        INSERT INTO shorts_metadata (id, source_url, source_video_id, part_number, youtube_id, is_confirmed_uploaded, confirmed_at, created_at)
+                        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                    """, (record_id, s_url, source_video_id, part_number, youtube_id, now_iso, now_iso))
             cursor.execute("""
                 UPDATE video_series
                 SET is_confirmed = 1, confirmed_at = ?, youtube_id = ?, youtube_url = ?

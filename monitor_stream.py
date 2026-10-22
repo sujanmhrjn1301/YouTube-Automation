@@ -86,6 +86,12 @@ from src.services.stream_monitor import StreamMonitorAgent
     type=click.Choice(["tiny", "base", "small", "medium", "large-v3"], case_sensitive=False),
     help="Faster-whisper model size for transcription.",
 )
+@click.option(
+    "--captions/--no-captions",
+    default=False,
+    show_default=True,
+    help="Burn animated word-by-word karaoke captions onto live Shorts (default: False, pass --captions to enable).",
+)
 def main(
     url: str,
     chunk_duration: int,
@@ -98,6 +104,7 @@ def main(
     llm_provider: str,
     llm_model: Optional[str],
     whisper_model: str,
+    captions: bool,
 ) -> None:
     """Run Autonomous YouTube Livestream Monitoring Agent."""
     effective_max_clips = 1 if once else max_clips
@@ -113,6 +120,7 @@ def main(
         llm_provider=llm_provider,
         llm_model=llm_model,
         whisper_model=whisper_model,
+        enable_captions=captions,
     )
 
     agent.run_autonomous_monitor()

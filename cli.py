@@ -157,9 +157,9 @@ from src.utils import generate_short_filename, slice_transcription
 )
 @click.option(
     "--captions/--no-captions",
-    default=True,
+    default=False,
     show_default=True,
-    help="Burn animated word-by-word karaoke captions onto the Short (pass --no-captions to disable).",
+    help="Burn animated word-by-word karaoke captions onto the Short (default: False, pass --captions to enable).",
 )
 @click.option(
     "--no-subtitles",
@@ -190,6 +190,18 @@ from src.utils import generate_short_filename, slice_transcription
     default=False,
     help="Launch autonomous live stream monitoring agent to continuously monitor live broadcast and clip into isolated bucket.",
 )
+@click.option(
+    "--prompt",
+    default="",
+    type=str,
+    help="Custom scene directives or timestamps to pin (e.g. 'anchor at 14:20; find loud screams').",
+)
+@click.option(
+    "--search-engine",
+    default="both",
+    type=click.Choice(["both", "hybrid", "twelvelabs"], case_sensitive=False),
+    help="AI scene search engine: 'both' (Ensemble), 'hybrid' (Option 1), 'twelvelabs' (Option 2).",
+)
 def run_pipeline(
     url: Optional[str],
     doctor: bool,
@@ -214,6 +226,8 @@ def run_pipeline(
     multi_cut: bool,
     bleep_profanity: bool,
     monitor_stream: bool,
+    prompt: str = "",
+    search_engine: str = "both",
 ) -> None:
     """Run full automated YouTube Shorts pipeline end-to-end."""
     if monitor_stream:
@@ -332,6 +346,24 @@ def run_pipeline(
             top_k=effective_clips_count,
         )
 
+        if prompt and prompt.strip():
+            try:
+                from src.services.scene_search import SceneSearchService
+                searcher = SceneSearchService()
+                custom_scenes = searcher.find_scenes(
+                    prompt=prompt.strip(),
+                    search_engine=search_engine,
+                    video_url_or_path=url or str(video_meta.video_path),
+                    total_duration=video_meta.duration,
+                    top_k=effective_clips_count,
+                )
+                if custom_scenes:
+                    log_info("ORCHESTRATOR", f"Integrating {len(custom_scenes)} custom directives/pinned scenes into Short candidates.")
+                    for cs in custom_scenes:
+                        peaks.insert(0, (cs["start"], cs["end"], cs.get("confidence", 1.0)))
+            except Exception as e:
+                log_warning("ORCHESTRATOR", f"Scene search error: {e}")
+
         total_parts = len(peaks)
         log_info("ORCHESTRATOR", f"Extracted {total_parts} chronological peak moments for multi-part Short series.")
 
@@ -347,9 +379,10 @@ def run_pipeline(
 
         for idx, (p_start, p_end, p_score) in enumerate(peaks):
             part_num = idx + 1
-            part_label = f"Part {part_num}/{total_parts}" if total_parts > 1 else "Short"
+            part_label = f"Part {part_num}/{total_parts}" if total_parts > 1 else f"Short #{part_num}"
             console.print(f"\n[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
             log_info("ORCHESTRATOR", f"Processing {part_label} [{p_start:.1f}s -> {p_end:.1f}s] (Peak Score: {p_score})")
+            log_stage(4, f"Clipping Video {part_num}/{total_parts}", f"Processing {part_label} ({idx}/{total_parts} videos done)")
 
             # Fast targeted transcription of only this candidate window
             window_transcript = transcription_service.transcribe_window(
@@ -360,6 +393,7 @@ def run_pipeline(
             )
             if not window_transcript.segments:
                 log_warning("ORCHESTRATOR", f"No dialogue detected in {part_label}. Skipping...")
+                log_info("ORCHESTRATOR", f"Progress: {part_num}/{total_parts} videos done ({part_label} skipped)")
                 continue
 
             allow_cuts = bool(multi_cut and not is_post_livestream and not single_clip)
@@ -497,6 +531,7 @@ def run_pipeline(
                 "youtube": yt_url or "Saved locally",
                 "supabase": st_url or "Local only",
             })
+            log_success("ORCHESTRATOR", f"✅ Progress: {part_num}/{total_parts} videos done ({part_label} complete)")
 
         total_elapsed = time.time() - start_total_time
         result.success = True

@@ -6,8 +6,10 @@ directly to a strictly dedicated Supabase bucket ('livestream-shorts').
 """
 
 import os
+import queue
 import re
 import subprocess
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -54,6 +56,7 @@ class StreamMonitorAgent:
         llm_provider: str = "openrouter",
         llm_model: Optional[str] = None,
         whisper_model: str = "base",
+        enable_captions: bool = False,
     ) -> None:
         self.target_url = target_url
         self.chunk_duration = max(60, chunk_duration)
@@ -65,6 +68,7 @@ class StreamMonitorAgent:
         self.llm_provider = llm_provider
         self.llm_model = llm_model
         self.whisper_model = whisper_model
+        self.enable_captions = enable_captions
 
         self.agent_dir = settings.LIVESTREAM_AGENT_DIR
         self.agent_dir.mkdir(parents=True, exist_ok=True)
@@ -144,6 +148,11 @@ class StreamMonitorAgent:
                 }
         except Exception as e:
             err_msg = str(e)
+            if "ended" in err_msg.lower():
+                log_error("STREAM_MONITOR", "This YouTube live event has ended. A completed stream video will not broadcast live again.")
+                log_info("STREAM_MONITOR", f"💡 To extract Shorts from this completed video/VOD, run:\n   python cli.py --url {self.target_url} --crop-mode {self.crop_mode}")
+                log_info("STREAM_MONITOR", "💡 To monitor an ongoing/upcoming stream, pass a channel live link:\n   python monitor_stream.py --url https://www.youtube.com/@ChannelName/live")
+                return {"is_ended": True}
             if "not a live stream" in err_msg.lower() or "offline" in err_msg.lower():
                 return None
             log_warning("STREAM_MONITOR", f"Status check note: {err_msg[:90]}")
@@ -263,17 +272,22 @@ class StreamMonitorAgent:
                 bleep_intervals=bleep_intervals if self.bleep_profanity else None,
             )
 
-            # 6. Burn karaoke subtitles
+            # 6. Burn karaoke subtitles (if enabled, default: clean clip)
             subtitled_path = cropped_path
-            ass_path = self.subtitler.generate_subtitles(transcription, viral_clip, f"live_{stream_meta['video_id']}_{clip_index}")
-            if ass_path:
-                subtitled_path = self.subtitler.burn_subtitles(
-                    cropped_path,
-                    ass_path,
-                    f"live_{stream_meta['video_id']}_{clip_index}",
-                    descriptive_name=descriptive_filename,
-                    is_livestream=True,
-                )
+            if self.enable_captions:
+                try:
+                    subtitled_path = self.subtitler.burn_subtitles(
+                        video_path=cropped_path,
+                        transcription=transcription,
+                        clip=viral_clip,
+                        video_id=f"live_{stream_meta['video_id']}_{clip_index}",
+                        output_filename=descriptive_filename,
+                    )
+                except Exception as e:
+                    log_error("STREAM_MONITOR", f"Subtitle burn encountered an issue ({e}), using cropped 9:16 video.")
+                    subtitled_path = cropped_path
+            else:
+                log_info("STREAM_MONITOR", f"⏩ [CLEAN CLIP] Skipping captions burn for live Short #{clip_index}.")
 
             # 7. EXCLUSIVE UPLOAD TO DEDICATED SUPABASE BUCKET ('livestream-shorts')
             st_url = None
@@ -290,27 +304,29 @@ class StreamMonitorAgent:
 
             # Save metadata
             mock_meta = VideoMetadata(
-                video_id=stream_meta["video_id"],
-                title=stream_meta["title"],
-                author=stream_meta["author"],
-                duration=viral_clip.total_duration,
-                view_count=0,
+                video_id=stream_meta.get("video_id", "live_stream"),
+                title=stream_meta.get("title", "Live Stream"),
+                author=stream_meta.get("author", "Live Streamer"),
+                duration=float(viral_clip.total_duration),
+                resolution="1080x1920",
+                filesize_mb=round(Path(subtitled_path).stat().st_size / (1024 * 1024), 2) if Path(subtitled_path).exists() else 0.0,
                 video_path=str(chunk_path),
                 audio_path=str(wav_path),
                 was_live=True,
             )
 
-            self.db_service.save_clip_record(
-                source_url=stream_meta["live_url"],
+            rec_id = self.db_service.save_clip_record(
+                source_url=stream_meta.get("live_url", ""),
                 video_meta=mock_meta,
                 clip=viral_clip,
                 storage_url=st_url,
-                local_path=subtitled_path,
+                local_path=str(subtitled_path),
                 youtube_id=yt_id,
                 part_number=clip_index,
                 total_parts=clip_index,
                 is_confirmed=bool(yt_id),
             )
+            log_success("STREAM_MONITOR", f"Live clip registered in Pending Uploads & Highlights DB (ID: {rec_id})")
 
             return {
                 "clip_index": clip_index,
@@ -353,7 +369,48 @@ class StreamMonitorAgent:
         })
 
         clips_generated = 0
+        buffers_captured = 0
         cycle = 0
+        chunk_queue: queue.Queue = queue.Queue(maxsize=3)
+        stop_event = threading.Event()
+
+        def _processing_worker():
+            nonlocal clips_generated
+            while not stop_event.is_set():
+                try:
+                    item = chunk_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+
+                if item is None:
+                    break
+
+                chunk_path, stream_meta, clip_idx = item
+                try:
+                    log_info("STREAM_MONITOR", f"⚡ [ASYNC PROCESSOR] Processing buffer #{clip_idx} while stream watcher monitors the next moments...")
+                    result = self.process_live_chunk(
+                        chunk_path=chunk_path,
+                        stream_meta=stream_meta,
+                        clip_index=clip_idx,
+                    )
+
+                    if result:
+                        clips_generated += 1
+                        log_table("✨ Live Short Created & Uploaded", {
+                            "Short Title": result["title"],
+                            "Duration": result["duration"],
+                            "Supabase Storage Bucket": f"[bold green]{result['storage_bucket']}[/bold green]",
+                            "Cloud URL": result["storage_url"],
+                            "YouTube Status": result["youtube_url"],
+                            "Total Live Shorts Generated": str(clips_generated),
+                        })
+                except Exception as exc:
+                    log_error("STREAM_MONITOR", f"Error in background chunk processing: {exc}")
+                finally:
+                    chunk_queue.task_done()
+
+        worker_thread = threading.Thread(target=_processing_worker, daemon=True, name="LiveShortsProcessor")
+        worker_thread.start()
 
         try:
             while True:
@@ -365,6 +422,10 @@ class StreamMonitorAgent:
                     log_info("STREAM_MONITOR", f"😴 Stream is currently OFFLINE. Waiting {self.poll_interval}s before next check...")
                     time.sleep(self.poll_interval)
                     continue
+
+                if stream_info.get("is_ended"):
+                    log_warning("STREAM_MONITOR", "Agent monitor halted because this target event has ended.")
+                    break
 
                 log_success(
                     "STREAM_MONITOR",
@@ -379,30 +440,23 @@ class StreamMonitorAgent:
                 )
 
                 if chunk_p:
-                    clips_generated += 1
-                    result = self.process_live_chunk(
-                        chunk_path=chunk_p,
-                        stream_meta=stream_info,
-                        clip_index=clips_generated,
-                    )
+                    buffers_captured += 1
+                    log_info("STREAM_MONITOR", f"🚀 [PARALLEL PIPELINE] Buffer #{buffers_captured} queued for background clipping. Agent is immediately continuing to watch the live broadcast!")
+                    chunk_queue.put((chunk_p, stream_info, buffers_captured))
 
-                    if result:
-                        log_table("✨ Live Short Created & Uploaded", {
-                            "Short Title": result["title"],
-                            "Duration": result["duration"],
-                            "Supabase Storage Bucket": f"[bold green]{result['storage_bucket']}[/bold green]",
-                            "Cloud URL": result["storage_url"],
-                            "YouTube Status": result["youtube_url"],
-                            "Total Live Shorts Generated": str(clips_generated),
-                        })
-
-                if self.max_clips > 0 and clips_generated >= self.max_clips:
-                    log_success("STREAM_MONITOR", f"🎉 Reached max requested clips limit ({self.max_clips}). Agent shutting down gracefully.")
+                if self.max_clips > 0 and buffers_captured >= self.max_clips:
+                    log_success("STREAM_MONITOR", f"🎉 Reached max requested buffers limit ({self.max_clips}). Waiting for final clips to finish processing...")
                     break
 
-                # Sleep interval to allow stream to generate new content
-                log_info("STREAM_MONITOR", f"⏳ Monitoring active broadcast... Next buffer in {self.poll_interval}s...")
+                # Sleep interval to allow stream to accumulate next fresh window
+                log_info("STREAM_MONITOR", f"⏳ Watching active broadcast... Capturing next buffer in {self.poll_interval}s...")
                 time.sleep(self.poll_interval)
 
         except KeyboardInterrupt:
-            console.print("\n[bold yellow]Agent monitoring stopped by user (Ctrl+C). Total Shorts Generated:[/bold yellow] [bold green]" + str(clips_generated) + "[/bold green]\n")
+            console.print("\n[bold yellow]Agent monitoring stopped by user (Ctrl+C).[/bold yellow]")
+        finally:
+            log_info("STREAM_MONITOR", "Waiting for pending background clips to complete...")
+            stop_event.set()
+            chunk_queue.put(None)
+            worker_thread.join(timeout=15.0)
+            console.print(f"[bold green]Total Shorts Generated: {clips_generated}[/bold green]\n")

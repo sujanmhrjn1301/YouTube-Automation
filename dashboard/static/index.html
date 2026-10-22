@@ -12,13 +12,19 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=42">
+  <link rel="stylesheet" href="/styles.css?v=70">
 </head>
 
 <body>
   <!-- Icon sprite (Lucide-style strokes) -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
+      <symbol id="i-calendar" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </symbol>
       <symbol id="i-menu" viewBox="0 0 24 24">
         <line x1="4" x2="20" y1="12" y2="12" />
         <line x1="4" x2="20" y1="6" y2="6" />
@@ -441,15 +447,16 @@
 
           <div class="card">
             <div class="card-head">
-              <h2>YouTube quota today</h2>
+              <h2>Daily upload progress</h2>
             </div>
             <div class="quota">
-              <div class="quota-num"><span id="q-left">–</span><small>uploads left</small></div>
+              <div class="quota-num"><span id="q-uploads-today">0</span><small id="q-target-text">/ 6 target
+                  (min)</small></div>
               <div class="meter">
                 <div class="meter-fill" id="q-fill"></div>
               </div>
-              <div class="quota-meta muted"><span id="q-used">0</span> / 10,000 units · 1,600 per upload · resets
-                midnight PT</div>
+              <div class="quota-meta muted" id="q-meta-text">Target: 6 uploads/day minimum · Unlimited uploads allowed ·
+                Resets daily at midnight</div>
             </div>
           </div>
         </div>
@@ -470,7 +477,7 @@
         <div class="create-container">
           <form class="card form create-card" id="form-process" autocomplete="off" novalidate>
             <div class="card-head">
-              <h2>Select Pipeline Workflow</h2>
+              <h2>Select Clipping Methods</h2>
             </div>
 
             <!-- 3 Selectable Modes -->
@@ -499,40 +506,64 @@
                   </svg>Video Edit</div>
                 <div class="mode-btn-sub">7 to 9 min narrative YouTube video</div>
               </button>
+              <button type="button" class="mode-btn" data-mode="montage" aria-checked="false" id="mode-btn-montage">
+                <div class="mode-btn-head"><svg class="icon">
+                    <use href="#i-activity" />
+                  </svg>Viral Montage</div>
+                <div class="mode-btn-sub">Peak audio chaos &amp; highlights edit</div>
+              </button>
             </div>
 
             <div id="mode-badge-container" style="margin-top:-2px;">
               <div id="mode-badge"
                 style="display:inline-flex; align-items:center; gap:6px; color:var(--text-secondary); font-size:12px; padding:4px 0; background:transparent;">
-                <svg class="icon" style="width:14px; height:14px; color:var(--accent-light);"><use href="#i-film" /></svg>
+                <svg class="icon" style="width:14px; height:14px; color:var(--accent-light);">
+                  <use href="#i-film" />
+                </svg>
                 <span>Standard Video Mode · Snaps to natural sentences</span>
               </div>
             </div>
 
             <!-- Live Stream Preview Player (shown when mode=live and URL is present) -->
-            <div id="create-live-preview-box" style="display:none; margin-bottom:14px; border-radius:var(--radius-lg); overflow:hidden; border:1px solid rgba(255,255,255,0.08); background:#000;">
+            <div id="create-live-preview-box"
+              style="display:none; margin-bottom:14px; border-radius:var(--radius-lg); overflow:hidden; border:1px solid rgba(255,255,255,0.08); background:#000;">
               <div style="position:relative; width:100%; padding-top:56.25%;">
-                <iframe id="create-live-preview-iframe" src="" style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                <iframe id="create-live-preview-iframe" src=""
+                  style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen></iframe>
               </div>
-              <div style="padding:10px 14px; display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); border-top:1px solid rgba(255,255,255,0.06);">
+              <div
+                style="padding:10px 14px; display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); border-top:1px solid rgba(255,255,255,0.06);">
                 <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="live-dot" style="width:8px; height:8px; border-radius:50%; background:#ff0033; display:inline-block;"></span>
+                  <span class="live-dot"
+                    style="width:8px; height:8px; border-radius:50%; background:#ff0033; display:inline-block;"></span>
                   <span style="font-size:12px; font-weight:600; color:#ffffff;">Watching Livestream Preview</span>
                 </div>
                 <a href="#/live" class="btn btn-ghost btn-xs" style="font-size:11px; padding:4px 10px;">
-                  <svg class="icon" style="width:12px; height:12px;"><use href="#i-radio"/></svg>
+                  <svg class="icon" style="width:12px; height:12px;">
+                    <use href="#i-radio" />
+                  </svg>
                   <span>Open Full Live Agent</span>
                 </a>
               </div>
             </div>
 
-            <label class="field">
+            <div class="field">
               <span class="field-label" id="create-url-label">YouTube Video URL</span>
-              <input type="url" name="url" id="process-url" class="input"
-                placeholder="https://www.youtube.com/watch?v=..." required>
+              <div style="position:relative; width:100%;">
+                <input type="url" name="url" id="process-url" class="input"
+                  placeholder="https://www.youtube.com/watch?v=..." required style="padding-right:38px; width:100%;">
+                <button type="button" class="input-clear-btn" id="btn-process-clear-url" title="Clear input"
+                  style="display:none;" aria-label="Clear input">
+                  <svg class="icon" style="width:12px; height:12px;">
+                    <use href="#i-x" />
+                  </svg>
+                </button>
+              </div>
               <span class="field-hint" id="create-url-hint">Enter the YouTube video URL to analyze and extract viral
                 Shorts.</span>
-            </label>
+            </div>
 
             <!-- Mode-specific options: Live controls only show when mode=live -->
             <div id="create-live-controls" style="display:none; flex-direction:column; gap:12px;">
@@ -623,6 +654,45 @@
               </div>
             </div>
 
+            <!-- Viral Montage Builder Controls (shown when mode=montage) -->
+            <div id="create-montage-controls" style="display:none; flex-direction:column; gap:14px;">
+              <div class="field">
+                <span class="field-label">Creator Preset &amp; Energy Dynamics</span>
+                <select id="montage-creator" class="input">
+                  <option value="ishowspeed" selected>iShowSpeed · High-Energy Screams, Crash Outs &amp; Barks</option>
+                  <option value="mrbeast">MrBeast · Pacing Spikes, Big Stakes &amp; Climax Builds</option>
+                  <option value="generic">Generic Creator · RMS Peak Volume &amp; Heatmap Highlights</option>
+                </select>
+                <span class="field-hint">Optimizes audio reaction thresholding, zoom trigger sensitivity, and
+                  lower-third typography for the selected creator.</span>
+              </div>
+
+              <div class="field">
+                <span class="field-label">Target Montage Runtime</span>
+                <div class="segmented" role="radiogroup" data-name="montage-runtime" id="montage-runtime-selector">
+                  <button type="button" role="radio" data-value="240" aria-checked="false">4 Min (240s) · Quick
+                    Chaos</button>
+                  <button type="button" role="radio" data-value="480" aria-checked="false">8 Min (480s) ·
+                    Standard</button>
+                  <button type="button" role="radio" data-value="720" aria-checked="true">12 Min (720s) · Full
+                    Montage</button>
+                </div>
+              </div>
+
+              <div class="field row">
+                <div>
+                  <span class="field-label">Highlight Clip Target</span>
+                  <span class="field-hint">Number of peak moments sequenced along retention curve</span>
+                </div>
+                <div class="stepper" data-name="montage-clips" data-min="4" data-max="30" data-inc="1"
+                  id="montage-clip-count">
+                  <button type="button" data-step="-1" aria-label="Fewer">–</button>
+                  <output>12</output>
+                  <button type="button" data-step="1" aria-label="More">+</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Standard & Stream controls (hidden when live) -->
             <div id="create-standard-controls" style="display:flex; flex-direction:column; gap:12px;">
               <div class="field">
@@ -648,6 +718,77 @@
               </div>
             </div>
 
+            <!-- Custom Scene Directives & AI Search (Active for Stream, Longform, Montage) -->
+            <div id="create-custom-scene-section" style="display:none; flex-direction:column; gap:16px;">
+              <div class="field" style="margin:0;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
+                  <span class="field-label" id="custom-prompt-label">Custom Scene Directives &amp; Pinned Clips</span>
+                  <span class="muted small" id="custom-prompt-counter">0 / 300</span>
+                </div>
+                <textarea id="custom-prompt-input" class="input" rows="2" maxlength="300"
+                  placeholder="e.g. Find when Speed jumps over chair, or anchor on 14:20 and 32:10; prioritize loud screams..."
+                  style="resize:vertical; min-height:64px; font-family:var(--font-sans); line-height:1.5;"></textarea>
+                <span class="field-hint" id="custom-prompt-hint">Optional: Enter timestamps to hard-pin, or describe
+                  scenes for AI to find.</span>
+              </div>
+
+              <div class="field" style="margin:0;">
+                <span class="field-label">AI Scene Search Engine</span>
+                <div class="custom-dropdown" id="custom-engine-dropdown" style="width: 100%;">
+                  <button type="button" class="custom-dropdown-btn" id="custom-engine-btn"
+                    style="width: 100%; height: 42px;" aria-haspopup="listbox" aria-expanded="false">
+                    <span id="custom-engine-label" style="display: flex; align-items: center; gap: 8px;">
+                      <svg class="icon" style="width: 15px; height: 15px; color: var(--accent);">
+                        <use href="#i-sliders" />
+                      </svg>
+                      <span>Option 1 &amp; 2 Combined · Full Ensemble</span>
+                    </span>
+                    <svg class="icon custom-dropdown-arrow">
+                      <use href="#i-chevron" />
+                    </svg>
+                  </button>
+                  <ul class="custom-dropdown-menu" id="custom-engine-menu" role="listbox"
+                    style="width: 100%; min-width: 100%; box-sizing: border-box; z-index: 120;">
+                    <li class="custom-dropdown-item active" data-value="both" role="option" aria-selected="true">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-weight: 600; color: var(--text-primary);">Option 1 &amp; 2 Combined · Full
+                          Ensemble</span>
+                        <small style="color: var(--text-muted); font-size: 11px;">Runs TwelveLabs motion analysis +
+                          multimodal hybrid consensus</small>
+                      </div>
+                      <svg class="icon custom-dropdown-check">
+                        <use href="#i-check" />
+                      </svg>
+                    </li>
+                    <li class="custom-dropdown-item" data-value="hybrid" role="option" aria-selected="false">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-weight: 600; color: var(--text-primary);">Option 1 · Multimodal Hybrid</span>
+                        <small style="color: var(--text-muted); font-size: 11px;">Correlates Whisper dialogue
+                          transcripts, audio RMS energy &amp; vision</small>
+                      </div>
+                      <svg class="icon custom-dropdown-check">
+                        <use href="#i-check" />
+                      </svg>
+                    </li>
+                    <li class="custom-dropdown-item" data-value="twelvelabs" role="option" aria-selected="false">
+                      <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-weight: 600; color: var(--text-primary);">Option 2 · Dedicated Video Search
+                          AI</span>
+                        <small style="color: var(--text-muted); font-size: 11px;">TwelveLabs spatio-temporal action
+                          embeddings and scene motion vectors</small>
+                      </div>
+                      <svg class="icon custom-dropdown-check">
+                        <use href="#i-check" />
+                      </svg>
+                    </li>
+                  </ul>
+                  <input type="hidden" id="custom-search-engine" value="both" />
+                </div>
+                <span class="field-hint" id="custom-engine-hint">Combines TwelveLabs spatio-temporal action embeddings
+                  with Whisper transcripts &amp; audio peak energy.</span>
+              </div>
+            </div>
+
             <label class="toggle-row">
               <span><strong>Publish to YouTube</strong><small>Otherwise saved to Supabase cloud queue</small></span>
               <input type="checkbox" name="autoUpload" class="switch" id="process-autoupload">
@@ -658,9 +799,9 @@
                   <use href="#i-chevron" />
                 </svg>Advanced</summary>
               <div class="advanced-body">
-                <label class="toggle-row"><span><strong>Skip captions</strong><small>No burned-in karaoke
-                      subtitles</small></span><input type="checkbox" name="noCaptions" class="switch"
-                    id="process-nocaptions"></label>
+                <label class="toggle-row"><span><strong>Enable Captions</strong><small>Burn animated karaoke
+                      subtitles (Default: clean clip)</small></span><input type="checkbox" name="enableCaptions"
+                    class="switch" id="process-enable-captions"></label>
                 <label class="toggle-row"><span><strong>Keep swear words</strong><small>Disable censor
                       bleeps</small></span><input type="checkbox" name="noBleep" class="switch"
                     id="process-nobleep"></label>
@@ -687,6 +828,9 @@
                   <div class="workflow-status-badge">
                     <span class="status-pulse-ring" id="workflow-pulse-ring"></span>
                     <span id="workflow-3word-status" class="workflow-3word-status">Starting Pipeline Workflow...</span>
+                    <span class="chip chip-warn" id="workflow-clips-counter"
+                      style="display:none; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:12px; margin-left:6px; letter-spacing:0.02em;">0/6
+                      videos done</span>
                   </div>
                   <div class="workflow-progress-actions">
                     <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-terminal-drawer"
@@ -750,21 +894,31 @@
         <div class="live-agent-container">
           <!-- Top Stream Setup & Control Bar -->
           <div class="card live-setup-card" style="padding:16px 20px;">
-            <div class="live-setup-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div class="live-setup-header"
+              style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
               <div class="live-setup-title-wrap" style="display:flex; align-items:center; gap:10px;">
                 <span class="live-pulse-badge" id="live-agent-status-badge">
                   <span class="live-pulse-dot" id="live-agent-status-dot"></span>
                   <span id="live-agent-status-text">Ready to Watch</span>
                 </span>
-                <h2 id="live-stream-heading" style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0;">Live Stream Monitor & Player</h2>
+                <h2 id="live-stream-heading"
+                  style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0;">Live Stream Monitor &
+                  Player</h2>
               </div>
-              <div class="live-setup-actions" id="live-setup-actions" style="display:flex; align-items:center; gap:8px;">
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-live-toggle-chat" title="Toggle YouTube Live Chat">
-                  <svg class="icon"><use href="#i-radio"/></svg>
+              <div class="live-setup-actions" id="live-setup-actions"
+                style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-live-toggle-chat"
+                  title="Toggle YouTube Live Chat">
+                  <svg class="icon">
+                    <use href="#i-radio" />
+                  </svg>
                   <span id="live-chat-toggle-text">Show Live Chat</span>
                 </button>
-                <a href="#" target="_blank" class="btn btn-ghost btn-sm" id="btn-live-external-yt" style="display:none;" title="Open in YouTube">
-                  <svg class="icon"><use href="#i-youtube"/></svg><span>Watch on YouTube</span>
+                <a href="#" target="_blank" class="btn btn-ghost btn-sm" id="btn-live-external-yt" style="display:none;"
+                  title="Open in YouTube">
+                  <svg class="icon">
+                    <use href="#i-youtube" />
+                  </svg><span>Watch on YouTube</span>
                 </a>
               </div>
             </div>
@@ -772,57 +926,83 @@
             <!-- URL Input Bar (Quick launch or switch stream) -->
             <div class="live-url-bar" style="margin-top:14px; display:flex; gap:10px; align-items:center;">
               <div style="flex:1; position:relative;">
-                <input type="url" id="live-agent-stream-url" class="input" placeholder="Enter active YouTube livestream URL (e.g. https://www.youtube.com/watch?v=sxQvCbpnk2c)" style="padding-left:36px; width:100%;">
-                <svg class="icon" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; opacity:0.5;"><use href="#i-radio"/></svg>
+                <input type="url" id="live-agent-stream-url" class="input"
+                  placeholder="Paste any active YouTube livestream or channel link (e.g. https://www.youtube.com/@Channel/live)"
+                  style="padding-left:36px; padding-right:38px; width:100%;">
+                <svg class="icon"
+                  style="position:absolute; left:12px; top:50%; transform:translateY(-50%); width:16px; height:16px; opacity:0.5;">
+                  <use href="#i-radio" />
+                </svg>
+                <button type="button" class="input-clear-btn" id="btn-live-clear-url" title="Clear input & reset stream"
+                  style="display:none;" aria-label="Clear input">
+                  <svg class="icon" style="width:12px; height:12px;">
+                    <use href="#i-x" />
+                  </svg>
+                </button>
               </div>
               <button type="button" class="btn btn-primary" id="btn-live-load-player">
-                <svg class="icon"><use href="#i-play"/></svg>
+                <svg class="icon">
+                  <use href="#i-play" />
+                </svg>
                 <span>Load Live Stream</span>
               </button>
             </div>
           </div>
 
           <!-- Main Live Layout: Video Player + Live Chat + Agent Panel -->
-          <div class="live-layout-grid" id="live-layout-grid" style="display:grid; grid-template-columns:1fr 340px; gap:16px; margin-top:16px;">
+          <div class="live-layout-grid" id="live-layout-grid"
+            style="display:grid; grid-template-columns:1fr 340px; gap:16px; margin-top:16px;">
             <!-- Left: Live Video Player & Stream Details -->
             <div class="live-player-col" style="display:flex; flex-direction:column; gap:14px;">
               <!-- Responsive 16:9 Video Player Frame -->
-              <div class="card live-player-card" style="padding:0; overflow:hidden; border-radius:var(--radius-lg); background:#000; position:relative;">
+              <div class="card live-player-card"
+                style="padding:0; overflow:hidden; border-radius:var(--radius-lg); background:#000; position:relative;">
                 <div class="live-player-wrapper" style="position:relative; width:100%; padding-top:56.25%;">
-                  <iframe id="live-stream-iframe" 
-                          src="" 
-                          style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;" 
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                          allowfullscreen>
+                  <iframe id="live-stream-iframe" src=""
+                    style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowfullscreen>
                   </iframe>
-                  <div class="live-player-placeholder" id="live-player-placeholder" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(circle at center, rgba(30,30,35,0.9), #0a0a0c); color:var(--text-secondary); text-align:center; padding:20px;">
-                    <svg class="icon" style="width:48px; height:48px; color:var(--accent); opacity:0.8; margin-bottom:12px;"><use href="#i-radio"/></svg>
-                    <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:6px;">No Live Stream Loaded</h3>
-                    <p class="muted small" style="max-width:360px; margin-bottom:16px;">Enter a YouTube livestream link above or click below to watch the stream live with audio and video.</p>
-                    <button type="button" class="btn btn-ghost btn-sm" id="btn-live-load-demo" style="border:1px solid rgba(255,255,255,0.1);">
-                      Load Active Stream (sxQvCbpnk2c)
-                    </button>
+                  <div class="live-player-placeholder" id="live-player-placeholder"
+                    style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(circle at center, rgba(30,30,35,0.9), #0a0a0c); color:var(--text-secondary); text-align:center; padding:20px;">
+                    <svg class="icon"
+                      style="width:48px; height:48px; color:var(--accent); opacity:0.8; margin-bottom:12px;">
+                      <use href="#i-radio" />
+                    </svg>
+                    <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin-bottom:6px;">No Live
+                      Stream Loaded</h3>
+                    <p class="muted small" style="max-width:360px;">Paste any YouTube live broadcast or channel URL in
+                      the input bar above and click "Load Live Stream" to monitor in real-time.</p>
                   </div>
                 </div>
               </div>
 
               <!-- Stream Info Bar Below Player -->
-              <div class="card live-info-card" style="padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+              <div class="card live-info-card"
+                style="padding:14px 18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
                 <div style="display:flex; align-items:center; gap:12px;">
-                  <div class="live-channel-badge" style="width:36px; height:36px; border-radius:50%; background:rgba(255,0,51,0.1); border:1px solid rgba(255,0,51,0.25); display:flex; align-items:center; justify-content:center;">
-                    <svg class="icon" style="width:18px; height:18px; color:var(--accent);"><use href="#i-youtube"/></svg>
+                  <div class="live-channel-badge"
+                    style="width:36px; height:36px; border-radius:50%; background:rgba(255,0,51,0.1); border:1px solid rgba(255,0,51,0.25); display:flex; align-items:center; justify-content:center;">
+                    <svg class="icon" style="width:18px; height:18px; color:var(--accent);">
+                      <use href="#i-youtube" />
+                    </svg>
                   </div>
                   <div>
-                    <h3 id="live-player-stream-title" style="font-size:14px; font-weight:600; color:var(--text-primary); margin:0;">Live Broadcast</h3>
-                    <div id="live-player-stream-sub" class="muted small" style="margin-top:2px;">Watching in real-time · Low latency HLS embed</div>
+                    <h3 id="live-player-stream-title"
+                      style="font-size:14px; font-weight:600; color:var(--text-primary); margin:0;">Live Broadcast</h3>
+                    <div id="live-player-stream-sub" class="muted small" style="margin-top:2px;">Watching in real-time ·
+                      Low latency HLS embed</div>
                   </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
                   <span class="chip chip-ok" id="live-stream-sync-chip" style="font-size:11px;">
                     <span class="dot ok"></span> Low Latency
                   </span>
-                  <button type="button" class="btn btn-ghost btn-sm" id="btn-live-reload-stream" title="Reload Video Feed">
-                    <svg class="icon"><use href="#i-refresh"/></svg><span>Reload Feed</span>
+                  <button type="button" class="btn btn-ghost btn-sm" id="btn-live-reload-stream"
+                    title="Reload Video Feed">
+                    <svg class="icon">
+                      <use href="#i-refresh" />
+                    </svg><span>Reload Feed</span>
                   </button>
                 </div>
               </div>
@@ -834,10 +1014,13 @@
               <div class="card live-agent-control-card" style="padding:16px;">
                 <div class="card-head" style="margin-bottom:12px;">
                   <div style="display:flex; align-items:center; gap:8px;">
-                    <svg class="icon" style="color:var(--accent);"><use href="#i-scissors"/></svg>
+                    <svg class="icon" style="color:var(--accent);">
+                      <use href="#i-scissors" />
+                    </svg>
                     <h3 style="font-size:14px; font-weight:600;">Autonomous Clipper</h3>
                   </div>
-                  <span class="chip chip-warn" id="live-agent-active-chip" style="font-size:11px; display:none;">Active</span>
+                  <span class="chip chip-warn" id="live-agent-active-chip"
+                    style="font-size:11px; display:none;">Active</span>
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:12px;">
@@ -860,47 +1043,114 @@
                   </div>
 
                   <label class="toggle-row" style="padding:6px 0;">
+                    <span><strong>Enable Captions</strong><small>Burn animated karaoke subtitles</small></span>
+                    <input type="checkbox" id="live-enable-captions-toggle" class="switch">
+                  </label>
+
+                  <label class="toggle-row" style="padding:6px 0;">
                     <span><strong>Auto-Publish</strong><small>Push clips straight to YouTube</small></span>
                     <input type="checkbox" id="live-auto-publish-toggle" class="switch">
                   </label>
 
-                  <div style="display:flex; gap:8px; margin-top:6px;">
+                  <div id="live-agent-start-row" style="display:flex; gap:8px; margin-top:6px;">
                     <button type="button" class="btn btn-primary" id="btn-live-start-agent" style="flex:1;">
-                      <svg class="icon"><use href="#i-play"/></svg>
+                      <svg class="icon">
+                        <use href="#i-play" />
+                      </svg>
                       <span id="btn-live-start-agent-text">Start Clipping Stream</span>
                     </button>
-                    <button type="button" class="btn btn-danger" id="btn-live-stop-agent" style="display:none;">
-                      <svg class="icon"><use href="#i-stop"/></svg>
-                      <span>Stop</span>
-                    </button>
+                  </div>
+
+                  <!-- Live Agent Active Progress Box -->
+                  <div id="live-agent-progress-box" class="live-agent-progress-box"
+                    style="display:none; flex-direction:column; gap:10px; margin-top:10px; padding:12px 14px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.07); border-radius:var(--radius-md);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="status-pulse-ring" id="live-agent-pulse-ring"></span>
+                        <span id="live-agent-status-text" style="font-size:13px; font-weight:600; color:#fff;">Checking
+                          Stream Liveness...</span>
+                      </div>
+                      <span id="live-agent-pct-label"
+                        style="font-family:var(--font-mono); font-size:12px; font-weight:600; color:var(--accent);">15%</span>
+                    </div>
+
+                    <!-- Animated Loading Bar -->
+                    <div class="workflow-bar-track" style="height:7px;">
+                      <div class="workflow-bar-fill" id="live-agent-bar-fill" style="width:15%;">
+                        <div class="workflow-bar-shimmer"></div>
+                      </div>
+                    </div>
+
+                    <div
+                      style="display:flex; align-items:center; justify-content:space-between; font-size:11.5px; color:var(--text-muted);">
+                      <span id="live-agent-stage-detail"
+                        style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">Querying
+                        YouTube for active broadcast...</span>
+                      <span id="live-agent-cycle-badge"
+                        style="font-family:var(--font-mono); opacity:0.85; flex-shrink:0;">Cycle #1</span>
+                    </div>
+
+                    <!-- Live Mini Log Ticker -->
+                    <div id="live-agent-log-ticker"
+                      style="font-family:var(--font-mono); font-size:10.5px; color:rgba(255,255,255,0.65); background:rgba(0,0,0,0.35); padding:6px 8px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.04); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                      &gt; Initializing autonomous clipping agent...
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:2px;">
+                      <button type="button" class="btn btn-ghost btn-xs" id="btn-live-view-terminal"
+                        style="padding:4px 8px; font-size:11px;">
+                        <svg class="icon" style="width:12px; height:12px;">
+                          <use href="#i-terminal" />
+                        </svg>
+                        <span>View Logs</span>
+                      </button>
+                      <button type="button" class="btn btn-danger btn-xs" id="btn-live-stop-agent"
+                        style="padding:4px 10px; font-size:11px;">
+                        <svg class="icon" style="width:12px; height:12px;">
+                          <use href="#i-stop" />
+                        </svg>
+                        <span>Stop Agent</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
               <!-- Live Chat Container (Toggled) -->
-              <div class="card live-chat-card" id="live-chat-card" style="display:none; padding:0; overflow:hidden; height:420px; position:relative;">
-                <div class="card-head" style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02);">
+              <div class="card live-chat-card" id="live-chat-card"
+                style="display:none; padding:0; overflow:hidden; height:420px; position:relative;">
+                <div class="card-head"
+                  style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02);">
                   <div style="display:flex; align-items:center; gap:6px;">
-                    <svg class="icon" style="width:14px; height:14px;"><use href="#i-message-square"/></svg>
+                    <svg class="icon" style="width:14px; height:14px;">
+                      <use href="#i-message-square" />
+                    </svg>
                     <span style="font-size:12px; font-weight:600;">YouTube Live Chat</span>
                   </div>
                   <button type="button" class="btn-icon-xs" id="btn-close-live-chat" title="Close Chat">
-                    <svg class="icon"><use href="#i-x"/></svg>
+                    <svg class="icon">
+                      <use href="#i-x" />
+                    </svg>
                   </button>
                 </div>
-                <iframe id="live-chat-iframe" src="" style="width:100%; height:calc(100% - 40px); border:none;"></iframe>
+                <iframe id="live-chat-iframe" src=""
+                  style="width:100%; height:calc(100% - 40px); border:none;"></iframe>
               </div>
 
               <!-- Stream Session Clips List -->
               <div class="card live-clips-card" style="flex:1; padding:16px;">
                 <div class="card-head" style="margin-bottom:10px;">
                   <div style="display:flex; align-items:center; gap:8px;">
-                    <svg class="icon"><use href="#i-film"/></svg>
+                    <svg class="icon">
+                      <use href="#i-film" />
+                    </svg>
                     <h3 style="font-size:13px; font-weight:600;">Stream Highlights</h3>
                   </div>
                   <span class="chip chip-quiet" id="live-clips-count-badge">0 clips</span>
                 </div>
-                <div id="live-session-clips-list" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;">
+                <div id="live-session-clips-list"
+                  style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;">
                   <div class="muted small" style="text-align:center; padding:16px;">
                     No clips detected yet. As the agent listens, viral spikes will appear here instantly.
                   </div>
@@ -914,31 +1164,36 @@
       <!-- PUBLISH -->
       <section class="view" data-view="publish" hidden>
         <!-- Top Queue & Quota Card -->
-        <div class="card" style="padding:16px 20px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
-            <div>
-              <div style="display:flex; align-items:center; gap:8px;">
+        <div class="card publish-header-card">
+          <div class="publish-header-content">
+            <div class="publish-header-left">
+              <div class="publish-header-title-row">
                 <h2 style="font-size:15px; font-weight:600;">Pending Upload Queue</h2>
                 <span class="chip chip-warn" id="queue-count">0 ready</span>
               </div>
               <p class="muted small" style="margin-top:2px;">Each Short is ready to publish to YouTube <strong
                   id="publish-banner-account" style="color:var(--text-primary);">@eijishorts</strong> with 1 click.</p>
             </div>
-            <div style="display:flex; align-items:center; gap:16px;">
-              <div class="quota" style="min-width:180px; padding:0;">
-                <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                  <span style="font-size:12px; font-weight:500;">YouTube Quota</span>
-                  <span class="muted small"><span id="q2-left">–</span> left today</span>
+            <div class="publish-header-right">
+              <div class="quota publish-header-quota">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                  <span style="font-size:12px; font-weight:500;">Daily Uploads</span>
+                  <span class="muted small" id="q2-status-wrap"><span id="q2-left">–</span></span>
                 </div>
                 <div class="meter">
                   <div class="meter-fill" id="q2-fill"></div>
                 </div>
               </div>
 
-              <div class="btn-row" style="margin-top:0;">
+              <div class="btn-row publish-header-btn-row">
                 <button class="btn btn-primary" id="publish-next"><svg class="icon">
                     <use href="#i-send" />
                   </svg>Publish Next</button>
+                <button class="btn btn-accent" id="auto-schedule-btn"
+                  title="Auto-schedule Shorts at randomized peak viewing hours for 100% offline publication"><svg
+                    class="icon">
+                    <use href="#i-clock" />
+                  </svg><span>Auto-Schedule</span></button>
                 <button class="btn btn-ghost" id="publish-all">Publish All</button>
               </div>
             </div>
@@ -985,7 +1240,7 @@
                   </svg>
                 </li>
                 <li class="custom-dropdown-item" data-value="live" role="option" aria-selected="false">
-                  <span>Live stream clips</span>
+                  <span>Livestream Clips</span>
                   <svg class="icon custom-dropdown-check">
                     <use href="#i-check" />
                   </svg>
@@ -1002,12 +1257,19 @@
                     <use href="#i-check" />
                   </svg>
                 </li>
+                <li class="custom-dropdown-item" data-value="longform" role="option" aria-selected="false">
+                  <span>Longform Features</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
               </ul>
               <!-- Hidden native select for backwards compatibility / forms -->
               <select id="publish-category-filter" class="visually-hidden" tabindex="-1" aria-hidden="true">
                 <option value="all">All Categories</option>
                 <option value="live">Live stream clips</option>
                 <option value="stream">Post Livestream</option>
+                <option value="longform">Longform Features</option>
                 <option value="standard">Normal Clips</option>
               </select>
             </div>
@@ -1049,7 +1311,10 @@
           <div class="tabs" role="tablist" id="lib-tabs">
             <button role="tab" data-filter="all" aria-selected="true">All</button>
             <button role="tab" data-filter="edited" aria-selected="false">
-              <svg class="icon" style="margin-right:6px; width:13px; height:13px;"><use href="#i-video"/></svg>Edited Videos<span class="chip-count" id="lib-edited-count" style="margin-left:6px; font-size:10px; padding:1px 6px; border-radius:9999px; background:rgba(255,255,255,0.08); display:none;">0</span>
+              <svg class="icon" style="margin-right:6px; width:13px; height:13px;">
+                <use href="#i-video" />
+              </svg>Edited Videos<span class="chip-count" id="lib-edited-count"
+                style="margin-left:6px; font-size:10px; padding:1px 6px; border-radius:9999px; background:rgba(255,255,255,0.08); display:none;">0</span>
             </button>
             <button role="tab" data-filter="scheduled" aria-selected="false">Scheduled</button>
             <button role="tab" data-filter="standard" aria-selected="false">Standard</button>
@@ -1346,7 +1611,7 @@
 
   <!-- Account Selection Modal for Publishing -->
   <div class="modal-backdrop" id="account-publish-modal-backdrop" hidden>
-    <div class="confirm-modal-dialog account-publish-dialog" role="dialog" aria-modal="true"
+    <div class="account-publish-dialog" role="dialog" aria-modal="true"
       aria-labelledby="account-publish-modal-title">
       <div class="modal-head">
         <div style="display:flex; align-items:center; gap:10px;">
@@ -1369,60 +1634,51 @@
           </svg>
         </button>
       </div>
-      <div class="modal-body" style="padding:16px 20px;">
-        <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
-          Choose target YouTube account for <strong id="account-publish-short-title"
-            style="color:var(--text-primary);">this Short</strong>:
-        </p>
-
-        <!-- Account Options Cards List -->
-        <div class="account-select-list" id="account-publish-options">
-          <!-- Dynamically populated from state.accounts -->
-        </div>
-
-        <!-- Timing & Scheduler Options -->
-        <div class="publish-schedule-box">
-          <div class="publish-section-heading">
-            <svg class="icon">
-              <use href="#i-clock" />
-            </svg>
-            <span>Release Schedule</span>
-          </div>
-          <div class="publish-timing-toggle" role="radiogroup" id="publish-timing-toggle">
-            <button type="button" class="timing-tab-btn active" data-timing="now" id="timing-btn-now">
-              <svg class="icon" style="width:14px; height:14px;">
-                <use href="#i-send" />
-              </svg>
-              <span>Publish Now (Public)</span>
-            </button>
-            <button type="button" class="timing-tab-btn" data-timing="schedule" id="timing-btn-schedule">
-              <svg class="icon" style="width:14px; height:14px;">
-                <use href="#i-clock" />
-              </svg>
-              <span>Schedule for Later</span>
-            </button>
-          </div>
-
-          <!-- Schedule Picker Container (shown when schedule is active) -->
-          <div id="publish-schedule-details" class="publish-schedule-details" style="display:none;">
-            <div class="field" style="margin-bottom:6px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span class="field-label" style="font-size:12px; margin:0;">Release Date &amp; Time (Local)</span>
-                <span id="schedule-relative-preview" style="font-size:11px; font-weight:500; color:#c4b5fd;"></span>
-              </div>
-              <input type="datetime-local" id="account-publish-datetime" class="input schedule-datetime-input">
-            </div>
-
-            <!-- Quick Presets -->
-            <div style="display:flex; flex-direction:column; gap:5px;">
-              <span class="muted small" style="font-size:11px;">Quick presets:</span>
-              <div class="schedule-presets" id="schedule-preset-buttons">
-                <button type="button" class="preset-pill" data-hours="1">+1 Hour</button>
-                <button type="button" class="preset-pill" data-hours="3">+3 Hours</button>
-                <button type="button" class="preset-pill" data-preset="tomorrow-9am">Tomorrow 9 AM</button>
-                <button type="button" class="preset-pill" data-preset="tomorrow-6pm">Tomorrow 6 PM</button>
+      <div class="modal-body account-publish-modal-body">
+        <div class="account-publish-grid">
+          <!-- LEFT COLUMN: Selected Short, Beautified Account Selector & Guarantees -->
+          <div class="account-publish-col-left">
+            <div class="account-publish-short-info">
+              <span class="account-publish-subhead">Selected Short</span>
+              <div class="account-publish-title-wrap">
+                <svg class="icon"><use href="#i-video"/></svg>
+                <strong id="account-publish-short-title" class="account-publish-title">this Short</strong>
               </div>
             </div>
+
+            <!-- Beautified Dropdown Account Selector -->
+            <div class="account-publish-field">
+              <label class="account-publish-subhead" for="account-modal-dropdown-btn">Upload Destination Channel</label>
+              <div class="custom-dropdown account-modal-dropdown" id="account-modal-dropdown">
+                <button type="button" class="custom-dropdown-btn account-modal-dropdown-btn" id="account-modal-dropdown-btn"
+                  aria-haspopup="listbox" aria-expanded="false" title="Select YouTube channel destination">
+                  <div class="account-modal-btn-content">
+                    <div class="account-modal-avatar">
+                      <svg class="icon"><use href="#i-youtube"/></svg>
+                    </div>
+                    <div class="account-modal-info">
+                      <div class="account-modal-name" id="account-modal-selected-name">EIJI Shorts</div>
+                      <div class="account-modal-handle" id="account-modal-selected-handle">@eijishorts</div>
+                    </div>
+                  </div>
+                  <div class="account-modal-btn-right">
+                    <span class="account-dot ok" id="account-modal-selected-dot"></span>
+                    <svg class="icon custom-dropdown-arrow"><use href="#i-chevron"/></svg>
+                  </div>
+                </button>
+                <ul class="custom-dropdown-menu account-modal-dropdown-menu" id="account-modal-dropdown-menu" role="listbox">
+                  <!-- Dynamically populated from state.accounts -->
+                </ul>
+              </div>
+            </div>
+
+            <!-- Hidden container for existing selection sync -->
+            <div class="account-select-list" id="account-publish-options" style="display:none !important;"></div>
+
+            <label class="account-select-remember">
+              <input type="checkbox" id="account-publish-set-active" checked>
+              <span>Keep as default account for future uploads</span>
+            </label>
 
             <div class="schedule-offline-note">
               <svg class="icon">
@@ -1430,16 +1686,135 @@
               </svg>
               <div>
                 <strong>100% Offline Release Guarantee</strong>
-                <div style="margin-top:2px; opacity:0.85;">Pre-uploaded directly to YouTube cloud servers as Private. YouTube will automatically publish it at the scheduled time even when your computer is off.</div>
+                <div style="margin-top:2px; opacity:0.85;">Pre-uploaded directly to YouTube cloud servers as Private.
+                  YouTube will automatically publish it at the scheduled time even when your computer is off.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN: Timing & Scheduler Options -->
+          <div class="account-publish-col-right">
+            <div class="publish-schedule-box">
+              <div class="publish-section-heading">
+                <svg class="icon">
+                  <use href="#i-clock" />
+                </svg>
+                <span>Release Schedule</span>
+              </div>
+              <div class="publish-timing-toggle" role="radiogroup" id="publish-timing-toggle">
+                <button type="button" class="timing-tab-btn active" data-timing="now" id="timing-btn-now">
+                  <svg class="icon" style="width:14px; height:14px;">
+                    <use href="#i-send" />
+                  </svg>
+                  <span>Publish Now (Public)</span>
+                </button>
+                <button type="button" class="timing-tab-btn" data-timing="schedule" id="timing-btn-schedule">
+                  <svg class="icon" style="width:14px; height:14px;">
+                    <use href="#i-clock" />
+                  </svg>
+                  <span>Schedule for Later</span>
+                </button>
+              </div>
+
+              <!-- Immediate confirmation message when Publish Now is selected -->
+              <div id="publish-now-details" class="publish-now-card">
+                <div class="publish-now-icon">
+                  <svg class="icon"><use href="#i-send"/></svg>
+                </div>
+                <div>
+                  <strong>Instant Public Release</strong>
+                  <p class="muted small" style="margin-top:2px;">Video will be uploaded directly to YouTube and immediately set to <strong>Public</strong>.</p>
+                </div>
+              </div>
+
+              <!-- Schedule Picker Container (shown when schedule is active) -->
+              <div id="publish-schedule-details" class="publish-schedule-details"
+                style="display:none; flex-direction:column; gap:10px;">
+                <div class="field" style="margin-bottom:0;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span class="field-label" style="font-size:12px; margin:0; display:flex; align-items:center; gap:6px;">
+                      <svg class="icon" style="width:14px; height:14px; color:var(--accent);">
+                        <use href="#i-calendar" />
+                      </svg>
+                      <span>Release Date &amp; Time (Local)</span>
+                    </span>
+                    <span id="schedule-relative-preview"
+                      style="font-size:11px; font-weight:600; color:var(--accent-light);"></span>
+                  </div>
+
+                  <!-- Beautified Modern Date & Time Picker (Matching exact size & side-by-side structure) -->
+                  <div class="studio-datetime-wrapper" id="studio-datetime-wrapper">
+                    <div class="studio-datetime-box" id="schedule-input-box" tabindex="0" role="button"
+                      aria-haspopup="dialog" aria-expanded="false">
+                      <svg class="icon">
+                        <use href="#i-calendar" />
+                      </svg>
+                      <span class="studio-datetime-display" id="studio-datetime-display">10/22/2026 09:36 PM</span>
+                      <input type="hidden" id="account-publish-datetime" value="">
+                    </div>
+
+                    <!-- Floating Popover: Exact same size & structure as native, beautified with YouTube Studio theme -->
+                    <div class="studio-dt-popover" id="studio-dt-popover" style="display:none;" role="dialog"
+                      aria-label="Date and time picker">
+                      <!-- LEFT: Calendar -->
+                      <div class="studio-dt-calendar-panel">
+                        <div class="studio-dt-header">
+                          <span class="studio-dt-month-title" id="sdt-month-title">October 2026</span>
+                          <div class="studio-dt-nav-arrows">
+                            <button type="button" class="sdt-nav-btn" id="sdt-prev-month" aria-label="Previous Month">
+                              <svg class="icon">
+                                <use href="#i-chevron" style="transform:rotate(90deg);" />
+                              </svg>
+                            </button>
+                            <button type="button" class="sdt-nav-btn" id="sdt-next-month" aria-label="Next Month">
+                              <svg class="icon">
+                                <use href="#i-chevron" style="transform:rotate(-90deg);" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div class="studio-dt-weekdays">
+                          <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                        </div>
+
+                        <div class="studio-dt-days-grid" id="sdt-days-grid"></div>
+
+                        <div class="studio-dt-cal-footer">
+                          <button type="button" class="sdt-action-link" id="sdt-clear-btn">Clear</button>
+                          <button type="button" class="sdt-action-link primary" id="sdt-today-btn">Today</button>
+                        </div>
+                      </div>
+
+                      <div class="studio-dt-divider"></div>
+
+                      <!-- RIGHT: 3 Vertical Scrollable Time Columns (Hours, Minutes, AM/PM) -->
+                      <div class="studio-dt-time-panel">
+                        <div class="studio-dt-time-col" id="sdt-hours-col" role="listbox" aria-label="Hour"></div>
+                        <div class="studio-dt-time-col" id="sdt-minutes-col" role="listbox" aria-label="Minute"></div>
+                        <div class="studio-dt-time-col sdt-ampm-col" id="sdt-ampm-col" role="listbox" aria-label="AM or PM">
+                          <button type="button" class="sdt-time-opt" data-val="AM">AM</button>
+                          <button type="button" class="sdt-time-opt active" data-val="PM">PM</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Quick Presets -->
+                <div style="display:flex; flex-direction:column; gap:5px;">
+                  <span class="muted small" style="font-size:11px; font-weight:500;">Quick Smart Presets:</span>
+                  <div class="schedule-presets" id="schedule-preset-buttons">
+                    <button type="button" class="preset-pill" data-hours="1">+1 Hour</button>
+                    <button type="button" class="preset-pill" data-hours="3">+3 Hours</button>
+                    <button type="button" class="preset-pill" data-preset="tomorrow-9am">Tomorrow 9 AM</button>
+                    <button type="button" class="preset-pill" data-preset="tomorrow-6pm">Tomorrow 6 PM (Peak)</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-
-        <label class="account-select-remember">
-          <input type="checkbox" id="account-publish-set-active" checked>
-          <span>Keep this account as default for future uploads</span>
-        </label>
       </div>
       <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
         <button class="btn btn-ghost" id="account-publish-cancel">Cancel</button>
@@ -1448,6 +1823,118 @@
             <use href="#i-send" />
           </svg><span id="account-publish-confirm-text">Confirm &amp; Upload</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto-Scheduler Modal -->
+  <div class="modal-backdrop" id="auto-scheduler-modal-backdrop" hidden>
+    <div class="account-select-dialog auto-scheduler-dialog" role="dialog" aria-modal="true"
+      aria-labelledby="auto-scheduler-title">
+      <div class="modal-head">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="account-option-avatar"
+            style="width:36px; height:36px; background:linear-gradient(135deg, #7c3aed, #ec4899); color:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+            <svg class="icon">
+              <use href="#i-clock" />
+            </svg>
+          </div>
+          <div>
+            <h3 id="auto-scheduler-title" style="margin:0; font-size:16px;">Autonomous Peak-Hour Scheduler</h3>
+            <p class="muted small" style="margin:0;">100% Offline Cloud Pre-Upload &bull; Human-like Organic Viewership
+              Timing</p>
+          </div>
+        </div>
+        <button class="icon-btn" id="auto-scheduler-close" aria-label="Close modal">
+          <svg class="icon">
+            <use href="#i-x" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding:16px 20px; display:flex; flex-direction:column; gap:14px;">
+        <!-- Offline Guarantee Banner -->
+        <div class="schedule-offline-note"
+          style="border-color:rgba(255, 255, 255, 0.08); background:rgba(255, 255, 255, 0.03);">
+          <svg class="icon" style="color:var(--accent-light); width:20px; height:20px; flex-shrink:0;">
+            <use href="#i-shield" />
+          </svg>
+          <div>
+            <strong style="color:var(--text-primary);">100% Offline Release Guarantee</strong>
+            <div style="margin-top:2px; font-size:12px; color:var(--text-secondary);">
+              Videos are pre-uploaded directly into YouTube's cloud as <em>Private</em> with <code
+                style="color:var(--text-primary); background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px;">publishAt</code>
+              set. YouTube servers automatically release each Short as <strong>Public</strong> at the exact scheduled
+              second, even if your PC is turned off, asleep, or offline.
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Row: Cadence & Count -->
+        <div class="auto-sched-controls-grid">
+          <div class="field" style="margin:0;">
+            <label class="field-label" style="font-size:12px;">Release Cadence</label>
+            <select id="auto-sched-cadence" class="input" style="padding:8px 12px; font-size:13px;">
+              <option value="2" selected>2 Shorts/Day (Lunch 12-2:30 PM &amp; Evening 6-9:30 PM)</option>
+              <option value="1">1 Short/Day (Prime Evening Peak 6-9:30 PM)</option>
+              <option value="3">3 Shorts/Day (Morning, Lunch &amp; Evening)</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label class="field-label" style="font-size:12px;">Batch Size (Min 6/day target)</label>
+            <select id="auto-sched-count" class="input" style="padding:8px 12px; font-size:13px;">
+              <option value="6" selected>6 Shorts (Daily Target)</option>
+              <option value="8">8 Shorts</option>
+              <option value="10">10 Shorts</option>
+              <option value="12">12 Shorts</option>
+              <option value="4">4 Shorts</option>
+              <option value="2">2 Shorts</option>
+              <option value="1">1 Short</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Target Account -->
+        <div class="auto-sched-account-banner">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="account-dot ok"></span>
+            <div>
+              <div style="font-size:13px; font-weight:600;" id="auto-sched-account-name">Target: EIJI Shorts
+                (@eijishorts)</div>
+              <div class="muted small" id="auto-sched-quota-summary">Daily Uploads: Checking status...</div>
+            </div>
+          </div>
+          <span class="chip chip-ok" id="auto-sched-quota-chip">Target Ready</span>
+        </div>
+
+        <!-- Preview Timetable -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span class="field-label" style="margin:0; font-size:12px;">Upcoming Release Timetable Preview</span>
+            <span class="muted small" id="auto-sched-preview-count">Loading preview...</span>
+          </div>
+          <div id="auto-sched-preview-list" class="auto-sched-preview-list"
+            style="max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot auto-sched-modal-foot">
+        <button class="btn btn-ghost" id="auto-sched-dry-run-btn"
+          title="Simulate run in terminal drawer without uploading">
+          <svg class="icon">
+            <use href="#i-terminal" />
+          </svg>Dry Run Simulation
+        </button>
+        <div class="auto-sched-modal-foot-right">
+          <button class="btn btn-ghost" id="auto-sched-cancel-btn">Cancel</button>
+          <button class="btn btn-primary" id="auto-sched-confirm-btn">
+            <svg class="icon">
+              <use href="#i-clock" />
+            </svg><span id="auto-sched-confirm-text">Pre-Upload &amp; Schedule (6)</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1494,6 +1981,8 @@
       <div class="terminal-drawer-status-left">
         <span class="status-pulse-ring" id="terminal-drawer-pulse-ring"></span>
         <span id="terminal-drawer-3words">Ingesting Video Audio...</span>
+        <span class="chip chip-warn chip-sm" id="terminal-drawer-clips-counter"
+          style="display:none; font-weight:700; margin-left:6px;">0/6 videos done</span>
       </div>
       <span id="terminal-drawer-pct" class="terminal-drawer-pct">14%</span>
     </div>
@@ -1509,7 +1998,7 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="/app.js?v=44"></script>
+  <script src="/app.js?v=70"></script>
 </body>
 
 </html>

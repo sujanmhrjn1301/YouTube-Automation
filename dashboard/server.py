@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DB_PATH = ROOT / "output" / "shorts.db"
 HOST = "127.0.0.1"
@@ -188,12 +190,18 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
             argv.append("--auto-upload")
         if opts.get("streamMode"):
             argv.append("--stream-mode")
-        if opts.get("noCaptions"):
+        if opts.get("enableCaptions"):
+            argv.append("--captions")
+        else:
             argv.append("--no-captions")
         if opts.get("noBleep"):
             argv.append("--no-bleep-profanity")
         if opts.get("keepRaw"):
             argv.append("--keep-raw")
+        if opts.get("prompt"):
+            argv += ["--prompt", str(opts["prompt"]).strip()]
+        if opts.get("searchEngine"):
+            argv += ["--search-engine", str(opts["searchEngine"]).strip()]
         return argv
 
     if kind == "monitor":
@@ -214,6 +222,10 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
                 argv += ["--max-clips", str(max_clips)]
         if opts.get("autoUpload"):
             argv.append("--auto-upload")
+        if opts.get("enableCaptions"):
+            argv.append("--captions")
+        else:
+            argv.append("--no-captions")
         if opts.get("noBleep"):
             argv.append("--no-bleep-profanity")
         return argv
@@ -227,6 +239,32 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
             argv += ["--target-runtime", str(_clamp_int(opts.get("targetRuntime"), 420, 540, 480))]
         if opts.get("focusTimestamp"):
             argv += ["--focus-timestamp", str(opts.get("focusTimestamp"))]
+        if opts.get("prompt"):
+            argv += ["--prompt", str(opts["prompt"]).strip()]
+        if opts.get("searchEngine"):
+            argv += ["--search-engine", str(opts["searchEngine"]).strip()]
+        return argv
+
+    if kind == "montage":
+        url = str(opts.get("url", "")).strip()
+        if not URL_RE.match(url):
+            raise ValueError("Enter a valid YouTube video URL.")
+        argv = [py, "create_montage.py", "--url", url]
+        creator = str(opts.get("creator", "ishowspeed")).strip().lower()
+        if creator in {"ishowspeed", "mrbeast", "generic"}:
+            argv += ["--creator", creator]
+        target_runtime = _clamp_int(opts.get("targetRuntime"), 120, 1800, 720)
+        argv += ["--target-duration", str(target_runtime)]
+        clip_count = _clamp_int(opts.get("clipCount"), 3, 40, 12)
+        argv += ["--clip-count", str(clip_count)]
+        if opts.get("upload"):
+            argv.append("--upload")
+        else:
+            argv.append("--no-upload")
+        if opts.get("prompt"):
+            argv += ["--prompt", str(opts["prompt"]).strip()]
+        if opts.get("searchEngine"):
+            argv += ["--search-engine", str(opts["searchEngine"]).strip()]
         return argv
 
     if (kind == "upload_next"):
@@ -241,6 +279,15 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
         return cmd
     if kind == "upload_all":
         return [py, "cli.py", "--upload-all-pending"]
+    if kind == "auto_schedule":
+        count = _clamp_int(opts.get("count"), 1, 6, 6)
+        slots_per_day = _clamp_int(opts.get("slots_per_day"), 1, 3, 2)
+        cmd = [py, "auto_schedule.py", "--count", str(count), "--slots-per-day", str(slots_per_day)]
+        if opts.get("dry_run"):
+            cmd.append("--dry-run")
+        if opts.get("account_id"):
+            cmd.extend(["--account", str(opts["account_id"])])
+        return cmd
     if kind == "doctor":
         return [py, "cli.py", "--doctor"]
     if kind == "auth":
@@ -255,9 +302,11 @@ LABELS = {
     "process": "Create Shorts",
     "monitor": "Live Agent",
     "longform": "Longform Video Editor",
+    "montage": "Viral Montage Builder",
     "upload_next": "Publish next",
     "upload_single": "Publish Short",
     "upload_all": "Publish all",
+    "auto_schedule": "Auto-Scheduler (Peak Hours)",
     "doctor": "Health check",
     "auth": "YouTube auth",
     "clean": "Clean cache",
@@ -276,6 +325,9 @@ class Job:
         self.target = str(opts.get("url", "")) or None
         self.lines: List[Dict[str, Any]] = []
         self.stages: List[Dict[str, Any]] = []
+        self.clips_done = 0
+        self.clips_total = _clamp_int(opts.get("clips"), 1, 10, 0)
+        self.current_clip = 1
         self.status = "running"
         self.exit_code: Optional[int] = None
         self.started = time.time()
@@ -308,6 +360,20 @@ class Job:
             self.lines.append({"n": self.seq, "t": text, "l": level})
             if len(self.lines) > MAX_LOG_LINES:
                 self.lines = self.lines[-MAX_LOG_LINES:]
+            
+            # Multi-clip progress detection: e.g. "2/6 videos done", "Processing Part 3/6", "Clipping Video 3/6"
+            m_done = re.search(r"(\d+)/(\d+)\s+videos?\s+done", text, re.IGNORECASE)
+            if m_done:
+                self.clips_done = int(m_done.group(1))
+                self.clips_total = int(m_done.group(2))
+                self.current_clip = min(self.clips_total, self.clips_done + 1)
+            else:
+                m_start = re.search(r"(?:Clipping Video|Processing Part|Processing Short)\s+(\d+)/(\d+)", text, re.IGNORECASE)
+                if m_start:
+                    self.current_clip = int(m_start.group(1))
+                    self.clips_total = int(m_start.group(2))
+                    self.clips_done = max(self.clips_done, self.current_clip - 1)
+
             m = STAGE_RE.search(text)
             if m:
                 for s in self.stages:
@@ -322,6 +388,10 @@ class Job:
     def summary(self) -> Dict[str, Any]:
         with self.lock:
             last = self.lines[-1]["t"] if self.lines else ""
+            c_done = getattr(self, "clips_done", 0)
+            c_tot = getattr(self, "clips_total", 0)
+            c_cur = getattr(self, "current_clip", 1)
+            label = f"{c_done}/{c_tot} videos done" if c_tot > 0 else None
             return {
                 "id": self.id,
                 "kind": self.kind,
@@ -334,6 +404,12 @@ class Job:
                 "stages": list(self.stages),
                 "lastLine": last[:180],
                 "command": " ".join(Path(a).name if i == 0 else a for i, a in enumerate(self.argv)),
+                "clipProgress": {
+                    "done": c_done,
+                    "total": c_tot,
+                    "current": c_cur,
+                    "label": label,
+                },
             }
 
 
@@ -478,9 +554,13 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
         url = d.get("storage_url") or ""
         yt = (d.get("youtube_id") or "").strip()
         local = d.get("local_path") or ""
-        if "livestream-shorts" in url:
+        url_str = str(url).lower()
+        local_str = str(local).replace("\\", "/").lower()
+        if "longform-videos" in url_str or "longform_videos" in local_str or "feature_" in local_str:
+            source = "longform"
+        elif "livestream-shorts" in url_str or "livestreams_clips" in url_str or "livestream_agent" in local_str or "_live_" in local_str:
             source = "live"
-        elif "post_livestreams" in url or "livestreams" in url or "post_livestreams" in str(local).replace("\\", "/") or "livestreams" in str(local).replace("\\", "/"):
+        elif "post_livestreams" in url_str or "post_livestreams" in local_str or "post_live" in local_str:
             source = "post_live"
         else:
             source = "standard"
@@ -551,13 +631,25 @@ def get_overview() -> Dict[str, Any]:
         finally:
             conn.close()
     running = [j for j in JOBS.list() if j["status"] == "running"]
+    uploads_today = units // 1600
+    min_goal = 6
+    target_met = uploads_today >= min_goal
+    uploads_left = max(0, min_goal - uploads_today)
     return {
         "total": len(lib),
         "uploaded": sum(1 for i in lib if i["uploaded"]),
         "pending": sum(1 for i in lib if not i["uploaded"]),
         "live": sum(1 for i in lib if i["source"] == "live"),
-        "quota": {"used": units, "max": 10000, "perUpload": 1600,
-                  "uploadsLeft": max(0, (10000 - units) // 1600)},
+        "quota": {
+            "used": units,
+            "max": 10000,
+            "perUpload": 1600,
+            "uploadsToday": uploads_today,
+            "minGoal": min_goal,
+            "targetMet": target_met,
+            "uploadsLeft": uploads_left,
+            "canUpload": True,
+        },
         "running": len(running),
         "recent": lib[:5],
         "accounts": get_accounts_summary(),
@@ -836,12 +928,15 @@ class Handler(BaseHTTPRequestHandler):
                 return o.isoformat()
             return str(o)
         body = json.dumps(payload, default=_json_serial).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError):
+            pass
 
     def _read_json(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length") or 0)
@@ -869,6 +964,43 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(get_library())
         if path == "/api/jobs":
             return self._json(JOBS.list())
+        if path == "/api/scheduler/preview":
+            count = _clamp_int((qs.get("count") or ["6"])[0], 1, 6, 6)
+            slots_per_day = _clamp_int((qs.get("slots_per_day") or ["2"])[0], 1, 3, 2)
+            try:
+                from src.services.auto_scheduler import get_unuploaded_candidates, generate_peak_slots
+                from src.services.database import DatabaseService
+
+                db = DatabaseService()
+                quota = db.get_daily_quota_status()
+                rem = quota.get("remaining_units", 0) // 1600
+                candidates = get_unuploaded_candidates(limit=count)
+                effective_count = min(len(candidates), count)
+                slots = generate_peak_slots(count=effective_count, slots_per_day=slots_per_day)
+
+                preview_items = []
+                for c, s in zip(candidates, slots):
+                    preview_items.append({
+                        "id": c.get("id"),
+                        "title": c.get("hook_title") or f"Short #{c.get('id')}",
+                        "part": c.get("part_number") or 1,
+                        "total_parts": c.get("total_parts") or 1,
+                        "duration": c.get("duration") or 0.0,
+                        "day_rel": s["day_rel"],
+                        "local_formatted": s["local_formatted"],
+                        "window_name": s["window_name"],
+                        "utc_iso": s["utc_iso"],
+                    })
+
+                return self._json({
+                    "quota": quota,
+                    "uploads_left_today": rem,
+                    "candidates_count": len(candidates),
+                    "preview": preview_items,
+                    "slots_per_day": slots_per_day,
+                })
+            except Exception as e:
+                return self._json({"error": str(e), "preview": []}, 500)
         if path == "/api/supabase/status":
             return self._json(get_supabase_status())
         if path == "/api/supabase/table":
@@ -942,12 +1074,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "not found"}, 404)
         data = target.read_bytes()
         ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
-        self.send_response(200)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.end_headers()
+            self.wfile.write(data)
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError):
+            pass
 
     def do_POST(self) -> None:
         if not self._same_origin():

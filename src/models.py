@@ -94,11 +94,12 @@ class VideoMetadata(BaseModel):
     title: str
     duration: float
     author: str
-    resolution: str
-    video_path: str
-    audio_path: str
-    filesize_mb: float
+    resolution: str = "1080x1920"
+    video_path: str = ""
+    audio_path: str = ""
+    filesize_mb: float = 0.0
     was_live: bool = False
+    view_count: int = 0
 
 
 class FaceTrackingBox(BaseModel):

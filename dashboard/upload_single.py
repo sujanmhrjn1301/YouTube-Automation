@@ -50,15 +50,19 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None) -> bool
     db_service = DatabaseService()
     uploader = YouTubeUploaderService()
 
-    # 1. Check daily YouTube API quota
+    # 1. Check daily YouTube upload progress (allow beyond 6, baseline target is 6)
     quota = db_service.get_daily_quota_status()
-    if not quota["can_upload"]:
-        log_warning(
+    uploads_today = quota.get("uploads_today", 0)
+    if uploads_today >= 6:
+        log_info(
             "UPLOADER",
-            f"⛔ YouTube Upload Quota Limit Reached ({quota['units_used']}/{quota['max_daily_units']} units used today).\n"
-            f"   Cannot upload right now to avoid API lockout. Resets at midnight PST.",
+            f"Daily baseline reached ({uploads_today}/6+ uploads completed today). Proceeding with upload...",
         )
-        return False
+    else:
+        log_info(
+            "UPLOADER",
+            f"Daily upload progress: {uploads_today}/6 uploads completed today.",
+        )
 
     # 2. Query target record: Supabase-First, Local Fallback
     item = None
@@ -183,8 +187,12 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None) -> bool
                     "youtube_id": yt_id
                 }
                 if publish_at:
-                    update_payload["scheduled_publish_at"] = publish_at
-                db_service.client.table("shorts_metadata").update(update_payload).eq("id", short_id).execute()
+                    try:
+                        db_service.client.table("shorts_metadata").update({**update_payload, "scheduled_publish_at": publish_at}).eq("id", short_id).execute()
+                    except Exception:
+                        db_service.client.table("shorts_metadata").update(update_payload).eq("id", short_id).execute()
+                else:
+                    db_service.client.table("shorts_metadata").update(update_payload).eq("id", short_id).execute()
             except Exception:
                 pass
         db_service.record_quota_usage(units=1600, is_upload=True)

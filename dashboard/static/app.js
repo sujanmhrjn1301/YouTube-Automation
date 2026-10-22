@@ -24,15 +24,15 @@
   };
 
   const VIEW_TITLES = {
-    overview:  { title: 'Overview', sub: 'Your pipeline at a glance.' },
-    create:    { title: 'Create Shorts', sub: 'Extract vertical clips with AI moment detection.' },
-    live:      { title: 'Live Agent', sub: 'Continuously watch a live stream and clip viral moments.' },
-    publish:   { title: 'Pending Uploads', sub: 'Review pending Shorts and publish them to YouTube.' },
+    overview: { title: 'Overview', sub: 'Your pipeline at a glance.' },
+    create: { title: 'Create Shorts', sub: 'Extract vertical clips with AI moment detection.' },
+    live: { title: 'Live Agent', sub: 'Continuously watch a live stream and clip viral moments.' },
+    publish: { title: 'Pending Uploads', sub: 'Review pending Shorts and publish them to YouTube.' },
     scheduled: { title: 'Scheduled Releases', sub: 'Shorts pre-uploaded to YouTube cloud servers and queued for automatic offline release.' },
-    library:   { title: 'Library', sub: 'Browse and inspect all generated Shorts and metadata.' },
-    supabase:  { title: 'Supabase Database', sub: 'Direct visual access to your PostgreSQL tables and cloud storage buckets.' },
-    activity:  { title: 'Activity', sub: 'Execution history, logs, and process states.' },
-    system:    { title: 'System', sub: 'Health checks, credentials, and disk cache maintenance.' },
+    library: { title: 'Library', sub: 'Browse and inspect all generated Shorts and metadata.' },
+    supabase: { title: 'Supabase Database', sub: 'Direct visual access to your PostgreSQL tables and cloud storage buckets.' },
+    activity: { title: 'Activity', sub: 'Execution history, logs, and process states.' },
+    system: { title: 'System', sub: 'Health checks, credentials, and disk cache maintenance.' },
   };
 
   // DOM Elements
@@ -247,25 +247,47 @@
     document.getElementById('st-pending').textContent = data.pending ?? '0';
     document.getElementById('st-live').textContent = data.live ?? '0';
 
-    // Quota
+    // Quota & Daily Upload Goal (Minimum 6/day baseline, no hard stop)
     const quota = data.quota || {};
-    const left = quota.uploadsLeft ?? 0;
-    const used = quota.used ?? 0;
-    const max = quota.max ?? 10000;
-    const pct = Math.min(100, Math.round((used / max) * 100));
+    const uploadsToday = quota.uploadsToday ?? Math.floor((quota.used || 0) / (quota.perUpload || 1600));
+    const minGoal = quota.minGoal ?? 6;
+    const targetMet = uploadsToday >= minGoal;
+    const goalPct = Math.min(100, Math.round((uploadsToday / minGoal) * 100));
 
-    const qLeft = document.getElementById('q-left');
+    // Overview Page elements
+    const qUploadsToday = document.getElementById('q-uploads-today');
+    const qTargetText = document.getElementById('q-target-text');
     const qFill = document.getElementById('q-fill');
-    const qUsed = document.getElementById('q-used');
-    if (qLeft) qLeft.textContent = left;
-    if (qFill) qFill.style.width = `${pct}%`;
-    if (qUsed) qUsed.textContent = used.toLocaleString();
+    const qMetaText = document.getElementById('q-meta-text');
+
+    if (qUploadsToday) qUploadsToday.textContent = String(uploadsToday);
+    if (qTargetText) {
+      qTargetText.textContent = targetMet ? `/ ${minGoal} target (met)` : `/ ${minGoal} target (min)`;
+    }
+    if (qFill) {
+      qFill.style.width = `${goalPct}%`;
+      qFill.classList.toggle('goal-met', targetMet);
+    }
+    if (qMetaText) {
+      qMetaText.textContent = targetMet
+        ? `${uploadsToday} uploads completed today · Target baseline of ${minGoal} met · Unlimited allowed · Resets daily at midnight`
+        : `${uploadsToday} of ${minGoal} uploads completed today (${minGoal - uploadsToday} to target) · Resets daily at midnight`;
+    }
 
     // Secondary quota on publish view
     const q2Left = document.getElementById('q2-left');
     const q2Fill = document.getElementById('q2-fill');
-    if (q2Left) q2Left.textContent = left;
-    if (q2Fill) q2Fill.style.width = `${pct}%`;
+    if (q2Left) {
+      if (targetMet) {
+        q2Left.innerHTML = `<span style="color:#10b981; font-weight:600;">${uploadsToday} uploaded today</span> · Target met`;
+      } else {
+        q2Left.innerHTML = `<span>${uploadsToday}/${minGoal} uploaded</span> · <span class="muted">${minGoal - uploadsToday} to target</span>`;
+      }
+    }
+    if (q2Fill) {
+      q2Fill.style.width = `${goalPct}%`;
+      q2Fill.classList.toggle('goal-met', targetMet);
+    }
 
     // Recent items list
     renderRecentList(data.recent || []);
@@ -302,12 +324,16 @@
     `).join('');
   }
 
-  function renderSourceBadge(source) {
+  function renderSourceBadge(sourceOrItem) {
+    const source = typeof sourceOrItem === 'object' && sourceOrItem !== null ? sourceOrItem.source : sourceOrItem;
+    if (source === 'longform') {
+      return '<span class="chip chip-scheduled" style="color:#38bdf8; border-color:rgba(56,189,248,0.3);">Longform Feature</span>';
+    }
     if (source === 'live') {
-      return '<span class="chip chip-quiet" style="color:#a78bfa;">Live Stream Agent</span>';
+      return '<span class="chip chip-quiet" style="color:#a78bfa; border-color:rgba(167,139,250,0.3);">Livestream Clip</span>';
     }
     if (source === 'post_live' || source === 'stream') {
-      return '<span class="chip chip-quiet">Post Livestream</span>';
+      return '<span class="chip chip-quiet" style="color:#c084fc; border-color:rgba(192,132,252,0.3);">Post Livestream</span>';
     }
     return '<span class="chip chip-quiet">Standard Video</span>';
   }
@@ -363,7 +389,7 @@
         <li data-edited-filename="${escapeHtml(v.filename)}" style="cursor:pointer;">
           <div class="row-main">
             <div class="row-title" style="display:flex; align-items:center; gap:8px;">
-              <span class="chip" style="background:rgba(255,0,51,0.12); color:var(--accent-light); font-weight:600; font-size:11px;">7–9m Feature</span>
+              <span class="chip" style="background:rgba(255,0,51,0.12); color:var(--accent-light); font-weight:600; font-size:11px;">Longform Feature</span>
               <span>${escapeHtml(v.title)}</span>
             </div>
             <div class="row-meta">
@@ -567,9 +593,9 @@
                       <svg class="icon"><use href="#i-check"/></svg>
                       <span>Published to YouTube · ${formatScheduledDate(item.originalScheduledAt || item.scheduledAt)}</span>
                     </span>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                      ${item.parts > 1 ? `<span class="chip chip-quiet" style="font-size:11px;">Part ${item.part}/${item.parts}</span>` : ''}
-                      ${item.score ? `<span class="chip chip-ok" style="font-size:11px;">${item.score}/10</span>` : ''}
+                    <div class="scheduled-card-tags">
+                      ${item.parts > 1 ? `<span class="chip-part-badge">Part ${item.part}/${item.parts}</span>` : ''}
+                      ${item.score ? `<span class="chip-score-badge">${item.score}/10</span>` : ''}
                     </div>
                   </div>
 
@@ -589,17 +615,17 @@
                   </div>
 
                   <div class="scheduled-card-actions">
-                    <button type="button" class="btn btn-ghost btn-sm" data-preview-id="${item.id}">
-                      <svg class="icon"><use href="#i-play"/></svg>Preview
-                    </button>
-                    <div style="display:flex; align-items:center; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <button type="button" class="btn btn-ghost btn-sm" data-preview-id="${item.id}">
+                        <svg class="icon"><use href="#i-play"/></svg>Preview
+                      </button>
                       <button type="button" class="btn btn-ghost btn-sm" data-drawer-id="${item.id}">Details</button>
-                      ${item.youtubeId ? `
-                        <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn-youtube-subtle">
-                          <svg class="icon" style="width:14px; height:14px;"><use href="#i-youtube"/></svg>View on YouTube
-                        </a>
-                      ` : ''}
                     </div>
+                    ${item.youtubeId ? `
+                      <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn-youtube-subtle">
+                        <svg class="icon" style="width:14px; height:14px;"><use href="#i-youtube"/></svg>View on YouTube
+                      </a>
+                    ` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -637,9 +663,9 @@
               <span>Scheduled · ${formatScheduledDate(item.scheduledAt)}</span>
               ${relTime ? `<span class="muted" style="margin-left:2px;">(${escapeHtml(relTime)})</span>` : ''}
             </span>
-            <div style="display:flex; align-items:center; gap:6px;">
-              ${item.parts > 1 ? `<span class="chip chip-quiet" style="font-size:11px;">Part ${item.part}/${item.parts}</span>` : ''}
-              ${item.score ? `<span class="chip chip-ok" style="font-size:11px;">${item.score}/10</span>` : ''}
+            <div class="scheduled-card-tags">
+              ${item.parts > 1 ? `<span class="chip-part-badge">Part ${item.part}/${item.parts}</span>` : ''}
+              ${item.score ? `<span class="chip-score-badge">${item.score}/10</span>` : ''}
             </div>
           </div>
 
@@ -659,17 +685,17 @@
           </div>
 
           <div class="scheduled-card-actions">
-            <button type="button" class="btn btn-ghost btn-sm" data-preview-id="${item.id}">
-              <svg class="icon"><use href="#i-play"/></svg>Preview
-            </button>
-            <div style="display:flex; align-items:center; gap:8px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button type="button" class="btn btn-ghost btn-sm" data-preview-id="${item.id}">
+                <svg class="icon"><use href="#i-play"/></svg>Preview
+              </button>
               <button type="button" class="btn btn-ghost btn-sm" data-drawer-id="${item.id}">Details</button>
-              ${item.youtubeId ? `
-                <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn-youtube-subtle">
-                  <svg class="icon" style="width:14px; height:14px;"><use href="#i-youtube"/></svg>YouTube
-                </a>
-              ` : ''}
             </div>
+            ${item.youtubeId ? `
+              <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn-youtube-subtle">
+                <svg class="icon" style="width:14px; height:14px;"><use href="#i-youtube"/></svg>View on YouTube
+              </a>
+            ` : ''}
           </div>
         </div>
       `;
@@ -1322,15 +1348,17 @@
     state.library = data;
     const pending = data.filter(i => !i.uploaded);
 
-    // Filter by selected category: 'all', 'live', 'stream', 'standard'
+    // Filter by selected category: 'all', 'live', 'stream', 'longform', 'standard'
     const cat = state.publishCategory || 'all';
     let filtered = pending;
     if (cat === 'live') {
       filtered = pending.filter(i => i.source === 'live');
     } else if (cat === 'stream') {
-      filtered = pending.filter(i => i.source === 'stream');
+      filtered = pending.filter(i => i.source === 'stream' || i.source === 'post_live');
+    } else if (cat === 'longform') {
+      filtered = pending.filter(i => i.source === 'longform');
     } else if (cat === 'standard') {
-      filtered = pending.filter(i => i.source !== 'live' && i.source !== 'stream');
+      filtered = pending.filter(i => i.source !== 'live' && i.source !== 'stream' && i.source !== 'post_live' && i.source !== 'longform');
     }
 
     const qCount = document.getElementById('queue-count');
@@ -1477,20 +1505,20 @@
           <div class="publish-card-title">${escapeHtml(item.title)}</div>
           ${item.sourceTitle ? `<div class="publish-card-source">${escapeHtml(item.sourceTitle)}</div>` : ''}
           <div class="publish-card-meta">
-            <span class="chip chip-quiet">Part ${item.part}/${item.parts}</span>
-            ${item.score ? `<span class="chip chip-ok">${item.score}/10</span>` : ''}
+            <span class="chip-part-badge">Part ${item.part}/${item.parts}</span>
+            ${item.score ? `<span class="chip-score-badge">${item.score}/10</span>` : ''}
             ${renderSourceBadge(item.source)}
           </div>
           <!-- Action: Live Loading Progress Bar OR Publish Button -->
           ${(() => {
-            const up = state.activeUploads && state.activeUploads[item.id];
-            if (up) {
-              const isSuccess = up.status === 'success';
-              const isError = up.status === 'error';
-              const cls = isSuccess ? 'publish-card-progress success' : (isError ? 'publish-card-progress error' : 'publish-card-progress');
-              const spinnerCls = isSuccess ? 'card-progress-spinner done' : (isError ? 'card-progress-spinner fail' : 'card-progress-spinner');
-              const spinnerText = isSuccess ? '✓' : (isError ? '✗' : '');
-              return `
+        const up = state.activeUploads && state.activeUploads[item.id];
+        if (up) {
+          const isSuccess = up.status === 'success';
+          const isError = up.status === 'error';
+          const cls = isSuccess ? 'publish-card-progress success' : (isError ? 'publish-card-progress error' : 'publish-card-progress');
+          const spinnerCls = isSuccess ? 'card-progress-spinner done' : (isError ? 'card-progress-spinner fail' : 'card-progress-spinner');
+          const spinnerText = isSuccess ? '✓' : (isError ? '✗' : '');
+          return `
                 <div class="${cls}" id="card-progress-${item.id}">
                   <div class="card-progress-top">
                     <div class="card-progress-status">
@@ -1504,13 +1532,13 @@
                   </div>
                 </div>
               `;
-            }
-            return `
+        }
+        return `
               <button class="publish-btn-quick" data-publish-id="${item.id}" title="Publish this Short to YouTube">
                 <svg class="icon"><use href="#i-youtube"/></svg>Publish to YouTube
               </button>
             `;
-          })()}
+      })()}
         </div>
       </div>
     `).join('');
@@ -1598,7 +1626,7 @@
         toast('Upload job started', 'ok');
         attachJobToPanel('run-publish', job.id);
         openTerminalDrawer();
-      } catch (e) {}
+      } catch (e) { }
     });
   }
 
@@ -1610,7 +1638,7 @@
         toast('Bulk upload job started', 'ok');
         attachJobToPanel('run-publish', job.id);
         openTerminalDrawer();
-      } catch (e) {}
+      } catch (e) { }
     });
   }
 
@@ -1643,9 +1671,16 @@
     const stdControls = document.getElementById('create-standard-controls');
     const advanced = document.getElementById('create-advanced');
     const longformControls = document.getElementById('create-longform-controls');
+    const montageControls = document.getElementById('create-montage-controls');
 
     const previewBox = document.getElementById('create-live-preview-box');
     const previewIframe = document.getElementById('create-live-preview-iframe');
+    const customSceneSection = document.getElementById('create-custom-scene-section');
+
+    const showCustomScene = (state.createMode === 'stream' || state.createMode === 'longform' || state.createMode === 'montage');
+    if (customSceneSection) {
+      customSceneSection.style.display = showCustomScene ? 'flex' : 'none';
+    }
 
     if (state.createMode === 'standard') {
       if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-film"/></svg><span>Standard Video Mode · Snaps to natural sentences & clauses</span>';
@@ -1656,6 +1691,7 @@
       if (stdControls) stdControls.style.display = 'flex';
       if (advanced) advanced.style.display = 'block';
       if (longformControls) longformControls.style.display = 'none';
+      if (montageControls) montageControls.style.display = 'none';
       if (previewBox) previewBox.style.display = 'none';
     } else if (state.createMode === 'stream') {
       if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:#c084fc; margin-right:6px;"><use href="#i-video"/></svg><span>Post Livestream Mode · Dynamic up-to-120s extension + profanity bleeping</span>';
@@ -1666,6 +1702,7 @@
       if (stdControls) stdControls.style.display = 'flex';
       if (advanced) advanced.style.display = 'block';
       if (longformControls) longformControls.style.display = 'none';
+      if (montageControls) montageControls.style.display = 'none';
       if (previewBox) previewBox.style.display = 'none';
     } else if (state.createMode === 'live') {
       if (badge) badge.innerHTML = '<span class="live-dot" style="width:8px; height:8px; border-radius:50%; background:#ff0033; display:inline-block; margin-right:6px;"></span><span style="color:#ff335c;">Monitor Live Stream · Autonomous agent cuts clips into livestream-shorts bucket</span>';
@@ -1676,6 +1713,7 @@
       if (stdControls) stdControls.style.display = 'none';
       if (advanced) advanced.style.display = 'none';
       if (longformControls) longformControls.style.display = 'none';
+      if (montageControls) montageControls.style.display = 'none';
 
       const pUrl = document.getElementById('process-url');
       if (pUrl && previewBox && previewIframe) {
@@ -1692,16 +1730,91 @@
       if (urlLabel) urlLabel.textContent = 'Livestream VOD URL';
       if (urlHint) urlHint.textContent = 'Enter your completed livestream broadcast to edit into a high-retention 7-9 min YouTube video.';
       if (startText) startText.textContent = 'Generate 7-9m Feature Video';
-      const urlInput = document.getElementById('process-url');
-      if (urlInput && !urlInput.value) {
-        urlInput.value = 'https://www.youtube.com/watch?v=LW_RUkEAHIg&t=4210s';
-      }
       if (liveControls) liveControls.style.display = 'none';
       if (stdControls) stdControls.style.display = 'none';
       if (advanced) advanced.style.display = 'none';
       if (longformControls) longformControls.style.display = 'flex';
+      if (montageControls) montageControls.style.display = 'none';
+      if (previewBox) previewBox.style.display = 'none';
+    } else if (state.createMode === 'montage') {
+      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-activity"/></svg><span>Viral Montage Mode · Peak audio spikes, 1.18x punch-ins &amp; dynamic pacing</span>';
+      if (urlLabel) urlLabel.textContent = 'YouTube Video or Livestream URL';
+      if (urlHint) urlHint.textContent = 'Enter any YouTube livestream, VOD, or video to extract peak reaction moments into an automated montage.';
+      if (startText) startText.textContent = 'Build Viral Montage';
+      if (liveControls) liveControls.style.display = 'none';
+      if (stdControls) stdControls.style.display = 'none';
+      if (advanced) advanced.style.display = 'none';
+      if (longformControls) longformControls.style.display = 'none';
+      if (montageControls) montageControls.style.display = 'flex';
       if (previewBox) previewBox.style.display = 'none';
     }
+  }
+
+  // Connect live character counter for custom prompt
+  const customPromptEl = document.getElementById('custom-prompt-input');
+  const customPromptCounterEl = document.getElementById('custom-prompt-counter');
+  if (customPromptEl && customPromptCounterEl) {
+    customPromptEl.addEventListener('input', () => {
+      customPromptCounterEl.textContent = `${customPromptEl.value.length} / 300`;
+    });
+  }
+
+  // Connect Custom AI Search Engine Dropdown
+  const engineDropdown = document.getElementById('custom-engine-dropdown');
+  const engineBtn = document.getElementById('custom-engine-btn');
+  const engineMenu = document.getElementById('custom-engine-menu');
+  const engineLabel = document.getElementById('custom-engine-label');
+  const engineHidden = document.getElementById('custom-search-engine');
+  const engineHint = document.getElementById('custom-engine-hint');
+
+  const engineHints = {
+    both: 'Combines TwelveLabs spatio-temporal action embeddings with Whisper transcripts & audio peak energy.',
+    hybrid: 'Option 1: Correlates Whisper transcripts, audio RMS energy spikes, and Gemini vision reasoning.',
+    twelvelabs: 'Option 2: Deep physical motion vector and spatio-temporal action search via TwelveLabs video AI.'
+  };
+
+  if (engineBtn && engineDropdown) {
+    engineBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = engineDropdown.classList.toggle('open');
+      engineBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    if (engineMenu) {
+      engineMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.custom-dropdown-item');
+        if (!item) return;
+        e.stopPropagation();
+        const val = item.dataset.value || 'both';
+
+        if (engineHidden) engineHidden.value = val;
+
+        engineMenu.querySelectorAll('.custom-dropdown-item').forEach(el => {
+          const isMatch = el.dataset.value === val;
+          el.classList.toggle('active', isMatch);
+          el.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+        });
+
+        const titleSpan = item.querySelector('span');
+        if (engineLabel && titleSpan) {
+          engineLabel.innerHTML = `<svg class="icon" style="width: 15px; height: 15px; color: var(--accent);"><use href="#i-sliders" /></svg><span>${titleSpan.textContent}</span>`;
+        }
+
+        if (engineHint && engineHints[val]) {
+          engineHint.textContent = engineHints[val];
+        }
+
+        engineDropdown.classList.remove('open');
+        engineBtn.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (engineDropdown && !engineDropdown.contains(e.target)) {
+        engineDropdown.classList.remove('open');
+        engineBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
   }
 
   const formProcess = document.getElementById('form-process');
@@ -1714,6 +1827,9 @@
         return;
       }
 
+      const customPrompt = document.getElementById('custom-prompt-input') ? document.getElementById('custom-prompt-input').value.trim() : '';
+      const customSearchEngine = document.getElementById('custom-search-engine') ? document.getElementById('custom-search-engine').value : 'both';
+
       if (state.createMode === 'live') {
         const liveMode = getSegmentedValue('create-live-mode') || 'continuous';
         const options = {
@@ -1724,6 +1840,7 @@
           maxClips: 0,
           crop: getSegmentedValue('process-crop') || 'blurred_background',
           autoUpload: document.getElementById('process-autoupload').checked,
+          enableCaptions: document.getElementById('process-enable-captions') ? document.getElementById('process-enable-captions').checked : false,
           noBleep: document.getElementById('process-nobleep') ? document.getElementById('process-nobleep').checked : false,
         };
 
@@ -1731,7 +1848,7 @@
           const job = await apiPost('/api/run', { kind: 'monitor', options });
           toast('Live stream monitoring started', 'ok');
           attachJobToPanel('run-process', job.id);
-        } catch (err) {}
+        } catch (err) { }
       } else if (state.createMode === 'longform') {
         const targetRuntime = parseInt(getSegmentedValue('longform-runtime-selector') || '480', 10);
         let focusTimestamp = 4210.0;
@@ -1749,13 +1866,33 @@
         const options = {
           url,
           targetRuntime,
-          focusTimestamp
+          focusTimestamp,
+          prompt: customPrompt,
+          searchEngine: customSearchEngine,
         };
         try {
           const job = await apiPost('/api/run', { kind: 'longform', options });
           toast('7–9m Longform video editing started!', 'ok');
           attachJobToPanel('run-process', job.id);
-        } catch (err) {}
+        } catch (err) { }
+      } else if (state.createMode === 'montage') {
+        const creator = document.getElementById('montage-creator') ? document.getElementById('montage-creator').value : 'ishowspeed';
+        const targetRuntime = parseInt(getSegmentedValue('montage-runtime-selector') || '720', 10);
+        const clipCount = getStepperValue('montage-clip-count') || 12;
+        const options = {
+          url,
+          creator,
+          targetRuntime,
+          clipCount,
+          upload: false,
+          prompt: customPrompt,
+          searchEngine: customSearchEngine,
+        };
+        try {
+          const job = await apiPost('/api/run', { kind: 'montage', options });
+          toast('Viral Montage generation started!', 'ok');
+          attachJobToPanel('run-process', job.id);
+        } catch (err) { }
       } else {
         const isStreamMode = state.createMode === 'stream';
         const options = {
@@ -1764,17 +1901,19 @@
           clips: getStepperValue('process-clips') || 3,
           autoUpload: document.getElementById('process-autoupload').checked,
           streamMode: isStreamMode,
-          noCaptions: document.getElementById('process-nocaptions').checked,
+          enableCaptions: document.getElementById('process-enable-captions') ? document.getElementById('process-enable-captions').checked : false,
           noBleep: document.getElementById('process-nobleep').checked,
           keepRaw: document.getElementById('process-keepraw').checked,
           model: document.getElementById('process-model').value || 'base',
+          prompt: customPrompt,
+          searchEngine: customSearchEngine,
         };
 
         try {
           const job = await apiPost('/api/run', { kind: 'process', options });
           toast(`${isStreamMode ? 'Stream VOD' : 'Normal video'} clipping started`, 'ok');
           attachJobToPanel('run-process', job.id);
-        } catch (err) {}
+        } catch (err) { }
       }
     });
   }
@@ -1849,7 +1988,7 @@
     }
   }
 
-  window.shortsAppPlayLongform = function(title, url, dur) {
+  window.shortsAppPlayLongform = function (title, url, dur) {
     const item = {
       title,
       isLongform: true,
@@ -1870,7 +2009,7 @@
         const job = await apiPost('/api/run', { kind });
         toast(`Started ${kind}`, 'ok');
         attachJobToPanel('run-system', job.id);
-      } catch (err) {}
+      } catch (err) { }
     });
   });
 
@@ -1879,12 +2018,29 @@
   // ─────────────────────────────────────────────────────────────
   function get3WordStatus(job) {
     if (!job) return 'Starting Pipeline Workflow...';
-    if (job.status === 'done') return 'Clips Finished Successfully!';
+    const prog = job.clipProgress;
+    if (job.status === 'done') {
+      const tot = (prog && prog.total) ? ` (${prog.total}/${prog.total} Done)` : '';
+      return `All Videos Completed${tot}!`;
+    }
     if (job.status === 'failed') return 'Pipeline Execution Failed';
     if (job.status === 'stopped') return 'Pipeline Execution Stopped';
 
     const stages = job.stages || [];
     const current = stages.find(s => !s.done) || (stages.length ? stages[stages.length - 1] : null);
+
+    // If multi-clip is active, show clip specific action
+    if (prog && prog.total > 1 && current && current.num >= 3) {
+      const cur = prog.current || (prog.done + 1);
+      switch (current.num) {
+        case 3: return `Transcribing Clip ${cur}/${prog.total}...`;
+        case 4: return `Clipping Video ${cur}/${prog.total}...`;
+        case 5: return `Reframing Clip ${cur}/${prog.total}...`;
+        case 6: return `Subtitling Clip ${cur}/${prog.total}...`;
+        case 7: return `Storing Clip ${cur}/${prog.total}...`;
+        default: break;
+      }
+    }
 
     if (current) {
       switch (current.num) {
@@ -2044,7 +2200,7 @@
           stopBtn.disabled = true;
           try {
             await apiPost(`/api/jobs/${jobId}/stop`, {});
-          } catch (e) {}
+          } catch (e) { }
           toast('Pipeline stopped', 'info');
           resetCreateWorkflowToDefault();
         };
@@ -2056,7 +2212,7 @@
           drawerStopBtn.disabled = true;
           try {
             await apiPost(`/api/jobs/${jobId}/stop`, {});
-          } catch (e) {}
+          } catch (e) { }
           toast('Pipeline stopped', 'info');
           resetCreateWorkflowToDefault();
         };
@@ -2190,6 +2346,8 @@
       const stageNum = current ? current.num : 1;
       const stageTitle = current ? current.title : 'Ingestion';
 
+      const prog = job.clipProgress;
+
       let pct = 8;
       let pctLabel = '8%';
       let stageDetail = 'Initializing pipeline...';
@@ -2197,7 +2355,8 @@
       if (job.status === 'done') {
         pct = 100;
         pctLabel = '100%';
-        stageDetail = 'All clips completed and stored!';
+        const tot = (prog && prog.total) ? `${prog.total}/${prog.total} videos done` : 'All clips completed';
+        stageDetail = `${tot} and stored in library.`;
       } else if (job.status === 'failed') {
         pctLabel = 'Failed';
         stageDetail = `Pipeline execution failed at stage ${stageNum}`;
@@ -2205,9 +2364,27 @@
         resetCreateWorkflowToDefault();
         return;
       } else {
-        pct = Math.min(95, Math.max(10, Math.round((stageNum / 7) * 100)));
-        pctLabel = `${pct}%`;
-        stageDetail = `Stage ${stageNum} of 7 · ${stageTitle}`;
+        // Multi-clip weighted progress calculation
+        if (prog && prog.total > 0) {
+          const totalClips = prog.total;
+          const doneClips = prog.done || 0;
+          let clipFraction = 0;
+          if (stageNum <= 2) {
+            clipFraction = (stageNum / 2) * 0.15;
+          } else {
+            clipFraction = ((stageNum - 2) / 5);
+          }
+          const overallFraction = (doneClips + Math.min(0.95, clipFraction)) / totalClips;
+          pct = Math.min(98, Math.max(10, Math.round(overallFraction * 100)));
+          pctLabel = `${pct}%`;
+
+          const doneText = `${doneClips}/${totalClips} videos done`;
+          stageDetail = `${doneText} · Stage ${stageNum} of 7 (${stageTitle})`;
+        } else {
+          pct = Math.min(95, Math.max(10, Math.round((stageNum / 7) * 100)));
+          pctLabel = `${pct}%`;
+          stageDetail = `Stage ${stageNum} of 7 · ${stageTitle}`;
+        }
       }
 
       // Update in-div workflow progress bar
@@ -2218,10 +2395,39 @@
       const pctLabelEl = document.getElementById('workflow-pct-label');
       const stopBtn = document.getElementById('btn-workflow-stop');
       const completedActions = document.getElementById('workflow-completed-actions');
+      const clipsCounterBadge = document.getElementById('workflow-clips-counter');
 
       if (statusText) statusText.textContent = words3;
       if (pctLabelEl) pctLabelEl.textContent = pctLabel;
       if (stageDetailEl) stageDetailEl.textContent = stageDetail;
+
+      // Update clips counter badge
+      if (clipsCounterBadge) {
+        if (prog && prog.total > 0 && job.status === 'running') {
+          clipsCounterBadge.style.display = 'inline-block';
+          clipsCounterBadge.textContent = `${prog.done}/${prog.total} videos done`;
+          clipsCounterBadge.className = prog.done > 0 ? 'chip chip-ok' : 'chip chip-warn';
+        } else if (job.status === 'done' && prog && prog.total > 0) {
+          clipsCounterBadge.style.display = 'inline-block';
+          clipsCounterBadge.textContent = `${prog.total}/${prog.total} videos done`;
+          clipsCounterBadge.className = 'chip chip-ok';
+        } else {
+          clipsCounterBadge.style.display = 'none';
+        }
+      }
+
+      // Drawer clips counter badge
+      const drawerClipsCounter = document.getElementById('terminal-drawer-clips-counter');
+      if (drawerClipsCounter) {
+        if (prog && prog.total > 0) {
+          drawerClipsCounter.style.display = 'inline-block';
+          drawerClipsCounter.textContent = `${prog.done}/${prog.total} videos done`;
+          drawerClipsCounter.className = prog.done > 0 ? 'chip chip-ok chip-sm' : 'chip chip-warn chip-sm';
+        } else {
+          drawerClipsCounter.style.display = 'none';
+        }
+      }
+
       if (barFill) {
         barFill.style.width = `${pct}%`;
         if (job.status === 'done') barFill.className = 'workflow-bar-fill done';
@@ -2558,7 +2764,7 @@
     }
   }
 
-  window.shortsAppOpenTerminal = function() {
+  window.shortsAppOpenTerminal = function () {
     if (el.activityDropdown) el.activityDropdown.hidden = true;
     if (el.topbarActivityBtn) el.topbarActivityBtn.classList.remove('active');
     openTerminalDrawer();
@@ -2575,7 +2781,7 @@
     try {
       const data = await apiGet('/api/overview');
       refreshActivityDropdown(true);
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -2629,7 +2835,7 @@
           sidebar.style.width = `${w}px`;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const logoBtn = document.getElementById('sidebar-logo-btn');
 
@@ -2645,7 +2851,7 @@
           sidebar.style.setProperty('--sidebar-width', `${w}px`);
           sidebar.style.width = `${w}px`;
         }
-      } catch (err) {}
+      } catch (err) { }
     }
 
     // Collapse button in expanded header
@@ -2701,7 +2907,7 @@
           const finalW = Math.min(420, Math.max(180, Math.round(startW + delta)));
           try {
             localStorage.setItem('shorts_sidebar_width', String(finalW));
-          } catch (err) {}
+          } catch (err) { }
 
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('mouseup', onMouseUp);
@@ -2736,7 +2942,7 @@
     if (title) title.textContent = item.title || (isLongform ? 'Watch Feature Video' : 'Watch Short');
     if (part) {
       if (isLongform) {
-        part.textContent = '7–9m Feature Video';
+        part.textContent = 'Longform Feature';
         part.className = 'chip chip-scheduled';
       } else {
         part.textContent = `Part ${item.part || 1}/${item.parts || 1}`;
@@ -2756,7 +2962,7 @@
     player.src = videoSrc;
     player.currentTime = 0;
     backdrop.hidden = false;
-    player.play().catch(() => {});
+    player.play().catch(() => { });
   }
 
   function closeVideoModal() {
@@ -2985,12 +3191,14 @@
     const btnNow = document.getElementById('timing-btn-now');
     const btnSchedule = document.getElementById('timing-btn-schedule');
     const scheduleDetails = document.getElementById('publish-schedule-details');
+    const publishNowDetails = document.getElementById('publish-now-details');
     const confirmText = document.getElementById('account-publish-confirm-text');
     const confirmIcon = document.getElementById('account-publish-confirm-icon');
 
     if (btnNow) btnNow.classList.add('active');
     if (btnSchedule) btnSchedule.classList.remove('active');
     if (scheduleDetails) scheduleDetails.style.display = 'none';
+    if (publishNowDetails) publishNowDetails.style.display = 'flex';
     if (confirmText) confirmText.textContent = 'Confirm & Upload';
     if (confirmIcon) {
       const useEl = confirmIcon.querySelector('use');
@@ -2999,12 +3207,18 @@
 
     // Default scheduled time to 2 hours in future, minimum 15 minutes ahead
     const dtInput = document.getElementById('account-publish-datetime');
+    const wrapper = document.getElementById('studio-datetime-wrapper');
+    const box = document.getElementById('schedule-input-box');
+    if (wrapper) wrapper.classList.remove('open');
+    if (box) box.setAttribute('aria-expanded', 'false');
+
     if (dtInput) {
       const now = new Date();
       const minDate = new Date(now.getTime() + 15 * 60 * 1000);
       const defaultDate = new Date(now.getTime() + 2 * 3600 * 1000);
       dtInput.min = formatLocalDateTimeInput(minDate);
       dtInput.value = formatLocalDateTimeInput(defaultDate);
+      dtInput.dispatchEvent(new Event('change'));
     }
 
     // Reset preset buttons highlight
@@ -3014,9 +3228,9 @@
     const accounts = (state.accounts && state.accounts.accounts && state.accounts.accounts.length)
       ? state.accounts.accounts
       : [
-          { id: 'alternate', name: 'Eiji Shorts', email: 'mhrznsuzan.alternate@gmail.com', handle: '@eijishorts', authenticated: true },
-          { id: 'official', name: 'Official Channel', email: 'maharjansujan.official@gmail.com', handle: '@MR.EIJI05', authenticated: true }
-        ];
+        { id: 'alternate', name: 'Eiji Shorts', email: 'mhrznsuzan.alternate@gmail.com', handle: '@eijishorts', authenticated: true },
+        { id: 'official', name: 'Official Channel', email: 'maharjansujan.official@gmail.com', handle: '@MR.EIJI05', authenticated: true }
+      ];
 
     const currentActiveId = (state.accounts && state.accounts.active_id) || 'alternate';
 
@@ -3060,6 +3274,85 @@
         confirmAccountAndPublish();
       });
     });
+
+    // Populate and sync beautified custom dropdown
+    const dropdownWrap = document.getElementById('account-modal-dropdown');
+    const dropdownBtn = document.getElementById('account-modal-dropdown-btn');
+    const dropdownMenu = document.getElementById('account-modal-dropdown-menu');
+    const selectedNameEl = document.getElementById('account-modal-selected-name');
+    const selectedHandleEl = document.getElementById('account-modal-selected-handle');
+    const selectedDotEl = document.getElementById('account-modal-selected-dot');
+
+    const updateSelectedDropdownAccount = (accId) => {
+      const targetAcc = accounts.find(a => a.id === accId) || accounts[0];
+      if (!targetAcc) return;
+
+      if (selectedNameEl) selectedNameEl.textContent = targetAcc.name;
+      if (selectedHandleEl) selectedHandleEl.textContent = targetAcc.handle || targetAcc.email;
+      if (selectedDotEl) {
+        selectedDotEl.className = `account-dot ${targetAcc.authenticated ? 'ok' : 'warn'}`;
+      }
+
+      // Sync hidden options cards for confirmAccountAndPublish
+      optionsList.querySelectorAll('.account-option-card').forEach(card => {
+        if (card.dataset.accountId === targetAcc.id) {
+          card.classList.add('selected');
+        } else {
+          card.classList.remove('selected');
+        }
+      });
+
+      // Update menu items active state
+      if (dropdownMenu) {
+        dropdownMenu.querySelectorAll('.account-modal-menu-item').forEach(item => {
+          const isItemActive = item.dataset.accountId === targetAcc.id;
+          item.classList.toggle('active', isItemActive);
+          item.setAttribute('aria-selected', isItemActive ? 'true' : 'false');
+          const checkIcon = item.querySelector('.account-modal-check');
+          if (checkIcon) checkIcon.style.display = isItemActive ? 'block' : 'none';
+        });
+      }
+    };
+
+    if (dropdownMenu) {
+      dropdownMenu.innerHTML = accounts.map(acc => {
+        const isSelected = acc.id === currentActiveId;
+        const statusText = acc.authenticated ? 'Ready' : 'Needs Auth';
+        const statusClass = acc.authenticated ? 'ok' : 'warn';
+        return `
+          <li class="account-modal-menu-item ${isSelected ? 'active' : ''}" data-account-id="${escapeHtml(acc.id)}" role="option" aria-selected="${isSelected ? 'true' : 'false'}">
+            <div class="account-modal-item-left">
+              <div class="account-modal-avatar">
+                <svg class="icon"><use href="#i-youtube"/></svg>
+              </div>
+              <div class="account-modal-item-info">
+                <div class="account-modal-item-name">${escapeHtml(acc.name)}</div>
+                <div class="account-modal-item-handle">${escapeHtml(acc.handle || acc.email)}</div>
+              </div>
+            </div>
+            <div class="account-modal-item-right">
+              <span class="account-dot ${statusClass}"></span>
+              <span class="account-status-label">${statusText}</span>
+              <svg class="icon account-modal-check" style="${isSelected ? 'display:block;' : 'display:none;'}"><use href="#i-check"/></svg>
+            </div>
+          </li>
+        `;
+      }).join('');
+
+      dropdownMenu.querySelectorAll('.account-modal-menu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const accId = item.dataset.accountId;
+          updateSelectedDropdownAccount(accId);
+          if (dropdownWrap) dropdownWrap.classList.remove('open');
+          if (dropdownBtn) dropdownBtn.setAttribute('aria-expanded', 'false');
+        });
+      });
+    }
+
+    updateSelectedDropdownAccount(currentActiveId);
+    if (dropdownWrap) dropdownWrap.classList.remove('open');
+    if (dropdownBtn) dropdownBtn.setAttribute('aria-expanded', 'false');
 
     modal.hidden = false;
   }
@@ -3117,10 +3410,274 @@
       try {
         const res = await apiPost('/api/accounts/switch', { id: chosenId });
         updateAccountUI(res);
-      } catch (err) {}
+      } catch (err) { }
     }
 
     startCardUpload(shortId, chosenAccount, publishAt);
+  }
+
+  function initStudioDateTimeInput() {
+    const wrapper = document.getElementById('studio-datetime-wrapper');
+    const box = document.getElementById('schedule-input-box');
+    const displayEl = document.getElementById('studio-datetime-display');
+    const dtInput = document.getElementById('account-publish-datetime');
+    const popover = document.getElementById('studio-dt-popover');
+    const monthTitle = document.getElementById('sdt-month-title');
+    const daysGrid = document.getElementById('sdt-days-grid');
+    const prevMonthBtn = document.getElementById('sdt-prev-month');
+    const nextMonthBtn = document.getElementById('sdt-next-month');
+    const hoursCol = document.getElementById('sdt-hours-col');
+    const minutesCol = document.getElementById('sdt-minutes-col');
+    const ampmCol = document.getElementById('sdt-ampm-col');
+    const clearBtn = document.getElementById('sdt-clear-btn');
+    const todayBtn = document.getElementById('sdt-today-btn');
+    const prevEl = document.getElementById('schedule-relative-preview');
+
+    if (!wrapper || !box || !dtInput || !popover || !displayEl) return;
+
+    let selectedDate = new Date();
+    if (dtInput.value) {
+      const p = new Date(dtInput.value);
+      if (!isNaN(p.getTime())) selectedDate = p;
+    } else {
+      selectedDate = new Date(Date.now() + 2 * 3600 * 1000);
+      dtInput.value = formatLocalDateTimeInput(selectedDate);
+    }
+
+    let viewMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    function syncDisplayAndStorage() {
+      dtInput.value = formatLocalDateTimeInput(selectedDate);
+      const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(selectedDate.getDate()).padStart(2, '0');
+      const yyyy = selectedDate.getFullYear();
+
+      let h = selectedDate.getHours();
+      const isPM = h >= 12;
+      let displayH = h % 12;
+      if (displayH === 0) displayH = 12;
+      const hStr = String(displayH).padStart(2, '0');
+      const mStr = String(selectedDate.getMinutes()).padStart(2, '0');
+      const ampm = isPM ? 'PM' : 'AM';
+
+      displayEl.textContent = `${mm}/${dd}/${yyyy} ${hStr}:${mStr} ${ampm}`;
+      if (prevEl) prevEl.textContent = formatRelativeRelease(selectedDate.toISOString());
+    }
+
+    function renderCalendar() {
+      if (!monthTitle || !daysGrid) return;
+      monthTitle.textContent = `${monthNames[viewMonth.getMonth()]} ${viewMonth.getFullYear()}`;
+      daysGrid.innerHTML = '';
+
+      const year = viewMonth.getFullYear();
+      const month = viewMonth.getMonth();
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Trailing days from prev month
+      for (let i = firstDayIndex - 1; i >= 0; i--) {
+        const d = daysInPrevMonth - i;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sdt-day-btn other-month disabled';
+        btn.textContent = d;
+        daysGrid.appendChild(btn);
+      }
+
+      // Days of current month
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cellDate = new Date(year, month, day);
+        cellDate.setHours(0, 0, 0, 0);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sdt-day-btn';
+        btn.textContent = day;
+
+        const isPast = cellDate.getTime() < today.getTime();
+        const isToday = cellDate.getTime() === today.getTime();
+        const isSelected = selectedDate.getFullYear() === year && selectedDate.getMonth() === month && selectedDate.getDate() === day;
+
+        if (isPast) btn.classList.add('disabled');
+        if (isToday) btn.classList.add('today');
+        if (isSelected) btn.classList.add('active');
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectedDate.setFullYear(year, month, day);
+          syncDisplayAndStorage();
+          renderCalendar();
+        });
+
+        daysGrid.appendChild(btn);
+      }
+
+      // Leading days of next month
+      const totalCells = firstDayIndex + daysInMonth;
+      const remaining = (7 - (totalCells % 7)) % 7;
+      for (let j = 1; j <= remaining; j++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sdt-day-btn other-month disabled';
+        btn.textContent = j;
+        daysGrid.appendChild(btn);
+      }
+    }
+
+    function renderTimeColumns() {
+      if (!hoursCol || !minutesCol || !ampmCol) return;
+
+      let curH = selectedDate.getHours();
+      const isPM = curH >= 12;
+      let displayH = curH % 12;
+      if (displayH === 0) displayH = 12;
+      const activeHStr = String(displayH).padStart(2, '0');
+      const activeMStr = String(selectedDate.getMinutes()).padStart(2, '0');
+
+      // Populate Hours (01-12)
+      hoursCol.innerHTML = '';
+      for (let h = 1; h <= 12; h++) {
+        const hStr = String(h).padStart(2, '0');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `sdt-time-opt ${hStr === activeHStr ? 'active' : ''}`;
+        btn.textContent = hStr;
+        btn.dataset.hour = hStr;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          let targetH = parseInt(hStr, 10);
+          const currentPM = selectedDate.getHours() >= 12;
+          if (currentPM && targetH < 12) targetH += 12;
+          if (!currentPM && targetH === 12) targetH = 0;
+          selectedDate.setHours(targetH);
+          syncDisplayAndStorage();
+          renderTimeColumns();
+        });
+        hoursCol.appendChild(btn);
+      }
+
+      // Populate Minutes (00-59)
+      minutesCol.innerHTML = '';
+      for (let m = 0; m < 60; m++) {
+        const mStr = String(m).padStart(2, '0');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `sdt-time-opt ${mStr === activeMStr ? 'active' : ''}`;
+        btn.textContent = mStr;
+        btn.dataset.min = mStr;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          selectedDate.setMinutes(parseInt(mStr, 10));
+          syncDisplayAndStorage();
+          renderTimeColumns();
+        });
+        minutesCol.appendChild(btn);
+      }
+
+      // AM/PM column
+      ampmCol.querySelectorAll('.sdt-time-opt').forEach(btn => {
+        const isMatch = btn.dataset.val === (isPM ? 'PM' : 'AM');
+        btn.classList.toggle('active', isMatch);
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const targetIsPM = btn.dataset.val === 'PM';
+          let h = selectedDate.getHours();
+          if (targetIsPM && h < 12) h += 12;
+          if (!targetIsPM && h >= 12) h -= 12;
+          selectedDate.setHours(h);
+          syncDisplayAndStorage();
+          renderTimeColumns();
+        };
+      });
+
+      // Auto-scroll active time options into view
+      setTimeout(() => {
+        const actH = hoursCol.querySelector('.sdt-time-opt.active');
+        if (actH) actH.scrollIntoView({ block: 'center' });
+        const actM = minutesCol.querySelector('.sdt-time-opt.active');
+        if (actM) actM.scrollIntoView({ block: 'center' });
+      }, 10);
+    }
+
+    // Toggle popover
+    box.onclick = (e) => {
+      e.stopPropagation();
+      const isOpen = wrapper.classList.toggle('open');
+      box.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      if (isOpen) {
+        renderCalendar();
+        renderTimeColumns();
+      }
+    };
+
+    // Close on outside click
+    if (!wrapper._outsideBound) {
+      document.addEventListener('click', (e) => {
+        if (wrapper && !wrapper.contains(e.target)) {
+          wrapper.classList.remove('open');
+          box.setAttribute('aria-expanded', 'false');
+        }
+      });
+      wrapper._outsideBound = true;
+    }
+
+    if (prevMonthBtn) {
+      prevMonthBtn.onclick = (e) => {
+        e.stopPropagation();
+        viewMonth.setMonth(viewMonth.getMonth() - 1);
+        renderCalendar();
+      };
+    }
+
+    if (nextMonthBtn) {
+      nextMonthBtn.onclick = (e) => {
+        e.stopPropagation();
+        viewMonth.setMonth(viewMonth.getMonth() + 1);
+        renderCalendar();
+      };
+    }
+
+    if (todayBtn) {
+      todayBtn.onclick = (e) => {
+        e.stopPropagation();
+        const now = new Date();
+        selectedDate.setFullYear(now.getFullYear(), now.getMonth(), now.getDate());
+        viewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        syncDisplayAndStorage();
+        renderCalendar();
+      };
+    }
+
+    if (clearBtn) {
+      clearBtn.onclick = (e) => {
+        e.stopPropagation();
+        selectedDate = new Date(Date.now() + 2 * 3600 * 1000);
+        viewMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+        syncDisplayAndStorage();
+        renderCalendar();
+        renderTimeColumns();
+      };
+    }
+
+    dtInput.onchange = () => {
+      const p = new Date(dtInput.value);
+      if (!isNaN(p.getTime())) {
+        selectedDate = p;
+        viewMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+        syncDisplayAndStorage();
+        renderCalendar();
+        renderTimeColumns();
+      }
+    };
+
+    syncDisplayAndStorage();
+    renderCalendar();
+    renderTimeColumns();
   }
 
   function initPublishAccountModal() {
@@ -3151,6 +3708,8 @@
         btnNow.classList.add('active');
         if (btnSchedule) btnSchedule.classList.remove('active');
         if (scheduleDetails) scheduleDetails.style.display = 'none';
+        const publishNowDetails = document.getElementById('publish-now-details');
+        if (publishNowDetails) publishNowDetails.style.display = 'flex';
         if (confirmText) confirmText.textContent = 'Confirm & Upload';
         if (confirmIcon) {
           const useEl = confirmIcon.querySelector('use');
@@ -3164,13 +3723,37 @@
         btnSchedule.classList.add('active');
         if (btnNow) btnNow.classList.remove('active');
         if (scheduleDetails) scheduleDetails.style.display = 'flex';
+        const publishNowDetails = document.getElementById('publish-now-details');
+        if (publishNowDetails) publishNowDetails.style.display = 'none';
         if (confirmText) confirmText.textContent = 'Schedule Upload';
         if (confirmIcon) {
           const useEl = confirmIcon.querySelector('use');
           if (useEl) useEl.setAttribute('href', '#i-clock');
         }
+        initStudioDateTimeInput();
       });
     }
+
+    // Custom Account Selection Dropdown toggle & outside-click close
+    const dropdownWrap = document.getElementById('account-modal-dropdown');
+    const dropdownBtn = document.getElementById('account-modal-dropdown-btn');
+
+    if (dropdownBtn && dropdownWrap) {
+      dropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = dropdownWrap.classList.toggle('open');
+        dropdownBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (dropdownWrap && dropdownWrap.classList.contains('open')) {
+        if (!dropdownWrap.contains(e.target)) {
+          dropdownWrap.classList.remove('open');
+          if (dropdownBtn) dropdownBtn.setAttribute('aria-expanded', 'false');
+        }
+      }
+    });
 
     // Schedule preset pills (+1 Hour, +3 Hours, Tomorrow 9 AM, Tomorrow 6 PM)
     const presetPills = document.querySelectorAll('#schedule-preset-buttons .preset-pill');
@@ -3187,7 +3770,7 @@
         if (!isNaN(d.getTime())) {
           prevEl.textContent = formatRelativeRelease(d.toISOString());
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     if (dtInput) {
@@ -3217,12 +3800,196 @@
         if (dtInput) {
           dtInput.value = formatLocalDateTimeInput(target);
           updateSchedulePreview();
+          dtInput.dispatchEvent(new Event('change'));
         }
       });
     });
+
+    initStudioDateTimeInput();
   }
 
-  window.shortsAppOpenUploadTerminal = function(shortId) {
+  // ─────────────────────────────────────────────────────────────
+  // Autonomous Peak-Hour Auto-Scheduler Modal
+  // ─────────────────────────────────────────────────────────────
+  function initAutoSchedulerModal() {
+    const btnOpen = document.getElementById('auto-schedule-btn');
+    const modal = document.getElementById('auto-scheduler-modal-backdrop');
+    const closeBtn = document.getElementById('auto-scheduler-close');
+    const cancelBtn = document.getElementById('auto-sched-cancel-btn');
+    const dryRunBtn = document.getElementById('auto-sched-dry-run-btn');
+    const confirmBtn = document.getElementById('auto-sched-confirm-btn');
+    const confirmText = document.getElementById('auto-sched-confirm-text');
+    const cadenceSelect = document.getElementById('auto-sched-cadence');
+    const countSelect = document.getElementById('auto-sched-count');
+    const previewList = document.getElementById('auto-sched-preview-list');
+    const previewCountEl = document.getElementById('auto-sched-preview-count');
+    const accountNameEl = document.getElementById('auto-sched-account-name');
+    const quotaSummaryEl = document.getElementById('auto-sched-quota-summary');
+    const quotaChipEl = document.getElementById('auto-sched-quota-chip');
+
+    let currentPreview = [];
+
+    const closeModal = () => {
+      if (modal) modal.hidden = true;
+    };
+
+    const openModal = async () => {
+      if (!modal) return;
+      modal.hidden = false;
+
+      // Update target account label
+      const activeAccount = (state.accounts && state.accounts.accounts && state.accounts.accounts.find(a => a.id === state.accounts.active_id)) || {
+        name: 'EIJI Shorts',
+        handle: '@eijishorts'
+      };
+      if (accountNameEl) {
+        accountNameEl.textContent = `Target: ${activeAccount.name} (${activeAccount.handle || '@YouTube'})`;
+      }
+
+      await refreshSchedulerPreview();
+    };
+
+    const refreshSchedulerPreview = async () => {
+      if (!previewList) return;
+      previewList.innerHTML = '<div style="padding:16px; text-align:center;" class="muted small"><div class="spinner" style="margin:0 auto 8px;"></div>Calculating peak viewership slots...</div>';
+
+      const count = parseInt(countSelect?.value || '6', 10);
+      const cadence = parseInt(cadenceSelect?.value || '2', 10);
+
+      try {
+        const data = await apiGet(`/api/scheduler/preview?count=${count}&slots_per_day=${cadence}`);
+        if (!data || !data.preview) {
+          previewList.innerHTML = '<div class="muted small" style="padding:14px; text-align:center;">No unuploaded Shorts available to schedule.</div>';
+          if (confirmBtn) confirmBtn.disabled = true;
+          return;
+        }
+
+        currentPreview = data.preview;
+
+        // Quota / upload progress indicators (Minimum 6/day baseline, no hard stop)
+        const quota = data.quota || {};
+        const uploadsToday = quota.uploads_today ?? Math.floor((quota.units_used || 0) / 1600);
+        const minGoal = 6;
+        const targetMet = uploadsToday >= minGoal;
+        if (quotaSummaryEl) {
+          quotaSummaryEl.textContent = `Daily Uploads: ${uploadsToday} completed today (Minimum daily baseline: ${minGoal})`;
+        }
+        if (quotaChipEl) {
+          quotaChipEl.className = 'chip chip-ok';
+          quotaChipEl.textContent = targetMet ? `Baseline Met (${uploadsToday}/${minGoal}+)` : `${uploadsToday}/${minGoal} to Baseline`;
+        }
+
+        if (previewCountEl) {
+          previewCountEl.textContent = `${data.preview.length} Shorts ready to schedule`;
+        }
+        if (confirmText) {
+          confirmText.textContent = `Pre-Upload & Schedule (${data.preview.length})`;
+        }
+        if (confirmBtn) {
+          confirmBtn.disabled = (data.preview.length === 0);
+        }
+
+        if (data.preview.length === 0) {
+          previewList.innerHTML = '<div class="muted small" style="padding:16px; text-align:center; background:rgba(255,255,255,0.02); border-radius:8px;">All created Shorts have already been uploaded or scheduled.</div>';
+          return;
+        }
+
+        previewList.innerHTML = data.preview.map((item, idx) => `
+          <div class="auto-sched-row">
+            <div class="auto-sched-left">
+              <span class="auto-sched-idx">#${idx + 1}</span>
+              <div class="auto-sched-info">
+                <span class="auto-sched-title" title="${escapeHtml(item.title)}">Part ${item.part}: ${escapeHtml(item.title)}</span>
+                <span class="auto-sched-meta">${item.duration ? `${Number(item.duration).toFixed(1)}s` : ''} &bull; ${escapeHtml(item.window_name)}</span>
+              </div>
+            </div>
+            <div class="auto-sched-right">
+              <span class="auto-sched-date">${escapeHtml(item.day_rel)} &bull; ${escapeHtml((item.local_formatted.split(' at ')[1]) || item.local_formatted)}</span>
+              <span class="auto-sched-window">${escapeHtml((item.local_formatted.split(' at ')[0]) || '')}</span>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        previewList.innerHTML = `<div class="error small" style="padding:14px; text-align:center;">Failed to load preview: ${escapeHtml(err.message)}</div>`;
+      }
+    };
+
+    if (btnOpen) btnOpen.addEventListener('click', openModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+    }
+
+    if (cadenceSelect) cadenceSelect.addEventListener('change', refreshSchedulerPreview);
+    if (countSelect) countSelect.addEventListener('change', refreshSchedulerPreview);
+
+    // Dry Run Action
+    if (dryRunBtn) {
+      dryRunBtn.addEventListener('click', async () => {
+        const count = parseInt(countSelect?.value || '6', 10);
+        const cadence = parseInt(cadenceSelect?.value || '2', 10);
+        closeModal();
+        try {
+          toast('Starting Auto-Scheduler simulation in terminal drawer...', 'ok');
+          const job = await apiPost('/api/run', {
+            kind: 'auto_schedule',
+            options: { count, slots_per_day: cadence, dry_run: true }
+          });
+          openTerminalDrawer();
+          attachJobToPanel('run-publish', job.id);
+        } catch (err) {
+          toast(`Simulation error: ${err.message}`, 'error');
+        }
+      });
+    }
+
+    // Live Execution Action
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', async () => {
+        const count = parseInt(countSelect?.value || '6', 10);
+        const cadence = parseInt(cadenceSelect?.value || '2', 10);
+        const schedCount = currentPreview.length || count;
+        closeModal();
+
+        try {
+          toast(`Auto-scheduling ${schedCount} Shorts to YouTube cloud for 100% offline release...`, 'ok');
+          const job = await apiPost('/api/run', {
+            kind: 'auto_schedule',
+            options: { count, slots_per_day: cadence, dry_run: false }
+          });
+
+          // Open terminal drawer to display real-time upload progress
+          openTerminalDrawer();
+          attachJobToPanel('run-publish', job.id);
+
+          // Poll job completion to automatically refresh views & toast success
+          const pollFinished = setInterval(async () => {
+            const runningJobs = await apiGet('/api/jobs');
+            if (runningJobs && Array.isArray(runningJobs)) {
+              const active = runningJobs.find(j => j.id === job.id);
+              if (!active || active.status !== 'running') {
+                clearInterval(pollFinished);
+                await refreshLibrary();
+                await refreshPublishQueue();
+                updateScheduledBadges();
+                toast('Auto-scheduling complete. All videos safely pre-uploaded to YouTube cloud.', 'ok');
+              }
+            }
+          }, 2500);
+
+        } catch (err) {
+          toast(`Auto-scheduler error: ${err.message}`, 'error');
+        }
+      });
+    }
+  }
+
+  window.shortsAppOpenUploadTerminal = function (shortId) {
     const upload = state.activeUploads && state.activeUploads[shortId];
     if (upload && upload.jobId) {
       const drawerTitle = document.getElementById('terminal-drawer-title');
@@ -3626,9 +4393,14 @@
     const statusDot = document.getElementById('live-agent-status-dot');
 
     if (!videoId) {
+      state.activeLiveStreamUrl = '';
+      state.activeLiveVideoId = '';
       if (iframe) iframe.src = '';
+      if (chatIframe) chatIframe.src = '';
       if (placeholder) placeholder.style.display = 'flex';
       if (extYt) extYt.style.display = 'none';
+      if (streamTitle) streamTitle.textContent = 'No Live Stream Selected';
+      if (streamSub) streamSub.textContent = 'Enter any active YouTube livestream link above to begin monitoring.';
       if (statusText) statusText.textContent = 'Ready to Watch';
       if (statusDot) statusDot.style.background = '#888';
       return;
@@ -3657,6 +4429,242 @@
     if (statusDot) statusDot.style.background = '#ff0033';
   }
 
+  let liveAgentPollTimer = null;
+  let liveAgentAfterSeq = 0;
+  let currentLiveAgentJobId = null;
+
+  window.shortsAppOpenLiveTerminal = function (jobId) {
+    const drawerTitle = document.getElementById('terminal-drawer-title');
+    const drawerChip = document.getElementById('terminal-drawer-chip');
+    const drawerStopBtn = document.getElementById('terminal-drawer-stop-btn');
+    if (drawerTitle) drawerTitle.textContent = `Autonomous Live Clipper · ${jobId || ''}`;
+    if (drawerChip) {
+      drawerChip.textContent = 'running';
+      drawerChip.className = 'chip';
+    }
+    if (drawerStopBtn) {
+      drawerStopBtn.style.display = 'inline-flex';
+      drawerStopBtn.disabled = false;
+      drawerStopBtn.onclick = async () => {
+        drawerStopBtn.disabled = true;
+        if (currentLiveAgentJobId) {
+          await apiPost(`/api/jobs/${currentLiveAgentJobId}/stop`, {});
+          toast('Live stream monitoring stopped', 'info');
+          stopLiveAgentPolling();
+          refreshLiveAgentView();
+        }
+      };
+    }
+    openTerminalDrawer();
+  };
+
+  function stopLiveAgentPolling() {
+    if (liveAgentPollTimer) {
+      clearTimeout(liveAgentPollTimer);
+      liveAgentPollTimer = null;
+    }
+    currentLiveAgentJobId = null;
+    liveAgentAfterSeq = 0;
+  }
+
+  function startLiveAgentPolling(jobId) {
+    if (currentLiveAgentJobId === jobId && liveAgentPollTimer) return;
+    stopLiveAgentPolling();
+    currentLiveAgentJobId = jobId;
+    liveAgentAfterSeq = 0;
+    pollLiveAgentLoop();
+  }
+
+  async function pollLiveAgentLoop() {
+    if (!currentLiveAgentJobId) return;
+    try {
+      const data = await apiGet(`/api/jobs/${currentLiveAgentJobId}/log?after=${liveAgentAfterSeq}`);
+      if (data && data.job) {
+        const { job, lines } = data;
+        if (lines && lines.length > 0) {
+          liveAgentAfterSeq = lines[lines.length - 1].n;
+          const drawerConsole = document.getElementById('terminal-drawer-console');
+          if (drawerConsole && document.getElementById('terminal-drawer')?.classList.contains('open')) {
+            appendDrawerLogs(lines, { jobId: currentLiveAgentJobId, afterSeq: liveAgentAfterSeq });
+          }
+        }
+        updateLiveAgentProgressUI(job, lines);
+
+        if (job.status === 'running') {
+          liveAgentPollTimer = setTimeout(pollLiveAgentLoop, 1200);
+        } else {
+          handleLiveAgentJobEnd(job);
+        }
+      } else {
+        liveAgentPollTimer = setTimeout(pollLiveAgentLoop, 1500);
+      }
+    } catch (err) {
+      liveAgentPollTimer = setTimeout(pollLiveAgentLoop, 2000);
+    }
+  }
+
+  function updateLiveAgentProgressUI(job, lines) {
+    const progressBox = document.getElementById('live-agent-progress-box');
+    const startRow = document.getElementById('live-agent-start-row');
+    const activeChip = document.getElementById('live-agent-active-chip');
+    if (!progressBox) return;
+
+    progressBox.style.display = 'flex';
+    if (startRow) startRow.style.display = 'none';
+    if (activeChip) activeChip.style.display = 'inline-flex';
+
+    const pulseRing = document.getElementById('live-agent-pulse-ring');
+    const statusText = document.getElementById('live-agent-status-text');
+    const pctLabel = document.getElementById('live-agent-pct-label');
+    const barFill = document.getElementById('live-agent-bar-fill');
+    const stageDetail = document.getElementById('live-agent-stage-detail');
+    const cycleBadge = document.getElementById('live-agent-cycle-badge');
+    const logTicker = document.getElementById('live-agent-log-ticker');
+
+    const lastLine = (lines && lines.length ? lines[lines.length - 1].t : (job.lastLine || '')).trim();
+
+    let pct = 15;
+    let statusTitle = 'Monitoring Stream...';
+    let detailMsg = 'Autonomous agent watching for broadcast...';
+    let pulseClass = 'status-pulse-ring';
+    let barClass = 'workflow-bar-fill';
+    let cycleStr = 'Cycle #1';
+
+    const cycleMatch = lastLine.match(/\[Cycle #(\d+)\]/i);
+    if (cycleMatch) {
+      cycleStr = `Cycle #${cycleMatch[1]}`;
+    } else if (state.lastLiveCycleStr) {
+      cycleStr = state.lastLiveCycleStr;
+    }
+    state.lastLiveCycleStr = cycleStr;
+
+    const lower = lastLine.toLowerCase();
+
+    if (lower.includes('checking if stream is live')) {
+      pct = 20;
+      statusTitle = 'Checking Stream Liveness';
+      detailMsg = 'Querying YouTube for active broadcast...';
+    } else if (lower.includes('stream is currently offline') || lower.includes('stream is offline') || lower.includes('offline')) {
+      pct = 12;
+      statusTitle = 'Stream Offline (Polling)';
+      detailMsg = 'Broadcaster offline · Retrying in 30s...';
+      pulseClass = 'status-pulse-ring waiting';
+      barClass = 'workflow-bar-fill waiting';
+    } else if (lower.includes('event has ended') || lower.includes('live event has ended')) {
+      pct = 100;
+      statusTitle = 'Broadcast Has Ended';
+      detailMsg = 'Stream finished. Use Create section for VODs.';
+      pulseClass = 'status-pulse-ring error';
+      barClass = 'workflow-bar-fill error';
+    } else if (lower.includes('active broadcast detected') || lower.includes('active broadcast')) {
+      pct = 32;
+      statusTitle = 'Broadcast Detected!';
+      detailMsg = 'Connected to active live stream...';
+      pulseClass = 'status-pulse-ring';
+    } else if (lower.includes('capturing') && lower.includes('rolling buffer')) {
+      pct = 45;
+      statusTitle = 'Capturing Live Buffer';
+      detailMsg = 'Recording live rolling chunk via FFmpeg...';
+    } else if (lower.includes('captured') && lower.includes('live buffer')) {
+      pct = 55;
+      statusTitle = 'Live Buffer Captured';
+      detailMsg = 'Buffer extracted · Preparing audio stream...';
+    } else if (lower.includes('transcribing') || lower.includes('whisper')) {
+      pct = 68;
+      statusTitle = 'Transcribing Speech';
+      detailMsg = 'Word-level transcription via faster-whisper...';
+    } else if (lower.includes('viral') || lower.includes('peak') || lower.includes('scoring')) {
+      pct = 78;
+      statusTitle = 'Detecting Viral Moments';
+      detailMsg = 'Scoring hook and sentence-snapping clip...';
+    } else if (lower.includes('reframing') || lower.includes('9:16') || lower.includes('crop')) {
+      pct = 85;
+      statusTitle = 'Reframing 9:16 Short';
+      detailMsg = 'Applying vertical crop with background blur...';
+    } else if (lower.includes('subtitles') || lower.includes('burning') || lower.includes('karaoke')) {
+      pct = 92;
+      statusTitle = 'Burning Kinetic Captions';
+      detailMsg = 'Rendering word-highlight karaoke subtitles...';
+    } else if (lower.includes('bleep') || lower.includes('censor')) {
+      pct = 94;
+      statusTitle = 'Filtering Profanity';
+      detailMsg = 'Applying 1000Hz censor bleeps...';
+    } else if (lower.includes('uploading') || lower.includes('supabase') || lower.includes('livestream-shorts')) {
+      pct = 97;
+      statusTitle = 'Uploading to Cloud';
+      detailMsg = 'Saving to isolated livestream-shorts bucket...';
+    } else if (lower.includes('live short created') || lower.includes('created & uploaded')) {
+      pct = 100;
+      statusTitle = 'Short Created & Stored!';
+      detailMsg = 'Saved to isolated livestream-shorts bucket!';
+      pulseClass = 'status-pulse-ring done';
+      barClass = 'workflow-bar-fill done';
+    }
+
+    if (pulseRing) pulseRing.className = pulseClass;
+    if (statusText) statusText.textContent = statusTitle;
+    if (pctLabel) pctLabel.textContent = `${pct}%`;
+    if (barFill) {
+      barFill.style.width = `${pct}%`;
+      barFill.className = barClass;
+    }
+    if (stageDetail) stageDetail.textContent = detailMsg;
+    if (cycleBadge) cycleBadge.textContent = cycleStr;
+    if (logTicker && lastLine) {
+      logTicker.textContent = `> ${lastLine}`;
+    }
+  }
+
+  function handleLiveAgentJobEnd(job) {
+    stopLiveAgentPolling();
+    const progressBox = document.getElementById('live-agent-progress-box');
+    const startRow = document.getElementById('live-agent-start-row');
+    const activeChip = document.getElementById('live-agent-active-chip');
+    const statusText = document.getElementById('live-agent-status-text');
+    const barFill = document.getElementById('live-agent-bar-fill');
+    const pulseRing = document.getElementById('live-agent-pulse-ring');
+    const stopBtn = document.getElementById('btn-live-stop-agent');
+
+    if (activeChip) activeChip.style.display = 'none';
+
+    if (job.status === 'stopped') {
+      if (progressBox) progressBox.style.display = 'none';
+      if (startRow) startRow.style.display = 'flex';
+      toast('Live stream monitoring stopped', 'info');
+    } else if (job.status === 'done') {
+      if (statusText) statusText.textContent = 'Agent Monitoring Finished';
+      if (barFill) {
+        barFill.style.width = '100%';
+        barFill.className = 'workflow-bar-fill done';
+      }
+      if (pulseRing) pulseRing.className = 'status-pulse-ring done';
+      if (stopBtn) {
+        stopBtn.innerHTML = '<svg class="icon" style="width:12px; height:12px;"><use href="#i-refresh"/></svg><span>Reset</span>';
+        stopBtn.className = 'btn btn-ghost btn-xs';
+        stopBtn.onclick = () => {
+          if (progressBox) progressBox.style.display = 'none';
+          if (startRow) startRow.style.display = 'flex';
+          stopBtn.innerHTML = '<svg class="icon" style="width:12px; height:12px;"><use href="#i-stop"/></svg><span>Stop Agent</span>';
+          stopBtn.className = 'btn btn-danger btn-xs';
+        };
+      }
+    } else if (job.status === 'failed') {
+      if (statusText) statusText.textContent = 'Agent Halted';
+      if (barFill) barFill.className = 'workflow-bar-fill error';
+      if (pulseRing) pulseRing.className = 'status-pulse-ring error';
+      if (stopBtn) {
+        stopBtn.innerHTML = '<svg class="icon" style="width:12px; height:12px;"><use href="#i-x"/></svg><span>Dismiss</span>';
+        stopBtn.className = 'btn btn-ghost btn-xs';
+        stopBtn.onclick = () => {
+          if (progressBox) progressBox.style.display = 'none';
+          if (startRow) startRow.style.display = 'flex';
+          stopBtn.innerHTML = '<svg class="icon" style="width:12px; height:12px;"><use href="#i-stop"/></svg><span>Stop Agent</span>';
+          stopBtn.className = 'btn btn-danger btn-xs';
+        };
+      }
+    }
+  }
+
   async function refreshLiveAgentView() {
     // Check if an active monitor job is running
     const jobs = await apiGet('/api/jobs');
@@ -3664,34 +4672,49 @@
 
     const streamUrlInput = document.getElementById('live-agent-stream-url');
     const activeChip = document.getElementById('live-agent-active-chip');
+    const progressBox = document.getElementById('live-agent-progress-box');
+    const startRow = document.getElementById('live-agent-start-row');
     const stopBtn = document.getElementById('btn-live-stop-agent');
-    const startBtn = document.getElementById('btn-live-start-agent');
+    const viewTerminalBtn = document.getElementById('btn-live-view-terminal');
+
+    if (viewTerminalBtn) {
+      viewTerminalBtn.onclick = () => {
+        window.shortsAppOpenLiveTerminal(activeMonitor ? activeMonitor.id : '');
+      };
+    }
 
     if (activeMonitor) {
       if (activeChip) activeChip.style.display = 'inline-flex';
+      if (startRow) startRow.style.display = 'none';
+      if (progressBox) progressBox.style.display = 'flex';
+
       if (stopBtn) {
-        stopBtn.style.display = 'inline-flex';
         stopBtn.disabled = false;
         stopBtn.onclick = async () => {
           stopBtn.disabled = true;
           try {
             await apiPost(`/api/jobs/${activeMonitor.id}/stop`, {});
-          } catch (e) {}
+          } catch (e) { }
           toast('Live stream monitoring stopped', 'info');
-          resetCreateWorkflowToDefault();
+          stopLiveAgentPolling();
+          if (progressBox) progressBox.style.display = 'none';
+          if (startRow) startRow.style.display = 'flex';
+          if (activeChip) activeChip.style.display = 'none';
           refreshLiveAgentView();
         };
       }
-      if (startBtn) startBtn.style.display = 'none';
+
+      startLiveAgentPolling(activeMonitor.id);
 
       if (activeMonitor.target && (!state.activeLiveStreamUrl || (streamUrlInput && streamUrlInput.value !== activeMonitor.target))) {
         if (streamUrlInput) streamUrlInput.value = activeMonitor.target;
         setLivePlayerSource(activeMonitor.target);
       }
     } else {
+      stopLiveAgentPolling();
       if (activeChip) activeChip.style.display = 'none';
-      if (stopBtn) stopBtn.style.display = 'none';
-      if (startBtn) startBtn.style.display = 'inline-flex';
+      if (progressBox) progressBox.style.display = 'none';
+      if (startRow) startRow.style.display = 'flex';
 
       // If input already has a URL but player is empty
       if (streamUrlInput && streamUrlInput.value.trim() && !state.activeLiveStreamUrl) {
@@ -3703,7 +4726,7 @@
     const clipsList = document.getElementById('live-session-clips-list');
     const clipsBadge = document.getElementById('live-clips-count-badge');
     const library = state.library || [];
-    const liveClips = library.filter(i => i.source === 'live' || i.source === 'stream');
+    const liveClips = library.filter(i => i.source === 'live' || i.source === 'stream' || i.source === 'post_live');
 
     if (clipsBadge) clipsBadge.textContent = `${liveClips.length} clips`;
 
@@ -3725,6 +4748,7 @@
   function initLiveAgentListeners() {
     const btnLoad = document.getElementById('btn-live-load-player');
     const inputUrl = document.getElementById('live-agent-stream-url');
+    const btnClearUrl = document.getElementById('btn-live-clear-url');
     const btnDemo = document.getElementById('btn-live-load-demo');
     const btnReload = document.getElementById('btn-live-reload-stream');
     const btnToggleChat = document.getElementById('btn-live-toggle-chat');
@@ -3732,6 +4756,33 @@
     const chatCard = document.getElementById('live-chat-card');
     const chatToggleText = document.getElementById('live-chat-toggle-text');
     const btnStartAgent = document.getElementById('btn-live-start-agent');
+
+    if (inputUrl && btnClearUrl) {
+      const syncClearBtn = () => {
+        const hasText = Boolean(inputUrl.value && inputUrl.value.trim().length > 0);
+        btnClearUrl.style.display = hasText ? 'flex' : 'none';
+      };
+
+      inputUrl.addEventListener('input', () => {
+        syncClearBtn();
+        if (!inputUrl.value.trim() && state.activeLiveStreamUrl) {
+          setLivePlayerSource('');
+          toast('Live stream cleared', 'info');
+        }
+      });
+
+      btnClearUrl.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        inputUrl.value = '';
+        syncClearBtn();
+        setLivePlayerSource('');
+        toast('Live stream monitor cleared', 'info');
+        inputUrl.focus();
+      });
+
+      syncClearBtn();
+    }
 
     if (btnLoad && inputUrl) {
       btnLoad.addEventListener('click', () => {
@@ -3741,6 +4792,7 @@
           return;
         }
         setLivePlayerSource(val);
+        if (btnClearUrl) btnClearUrl.style.display = 'flex';
         toast('Loaded live stream player', 'ok');
       });
       inputUrl.addEventListener('keydown', (e) => {
@@ -3751,14 +4803,7 @@
       });
     }
 
-    if (btnDemo) {
-      btnDemo.addEventListener('click', () => {
-        const demoUrl = 'https://www.youtube.com/watch?v=sxQvCbpnk2c';
-        if (inputUrl) inputUrl.value = demoUrl;
-        setLivePlayerSource(demoUrl);
-        toast('Loaded active stream player', 'ok');
-      });
-    }
+
 
     if (btnReload) {
       btnReload.addEventListener('click', () => {
@@ -3796,6 +4841,7 @@
         const chunk = parseInt(getSegmentedValue('live-buffer-segmented') || '150', 10);
         const poll = parseInt(getSegmentedValue('live-interval-segmented') || '45', 10);
         const autoUpload = document.getElementById('live-auto-publish-toggle') ? document.getElementById('live-auto-publish-toggle').checked : false;
+        const enableCaptions = document.getElementById('live-enable-captions-toggle') ? document.getElementById('live-enable-captions-toggle').checked : false;
 
         const options = {
           url,
@@ -3804,12 +4850,20 @@
           poll,
           maxClips: 0,
           crop: 'blurred_background',
-          autoUpload
+          autoUpload,
+          enableCaptions
         };
 
         try {
           const job = await apiPost('/api/run', { kind: 'monitor', options });
           toast('Autonomous live stream monitoring started!', 'ok');
+          const progressBox = document.getElementById('live-agent-progress-box');
+          const startRow = document.getElementById('live-agent-start-row');
+          const activeChip = document.getElementById('live-agent-active-chip');
+          if (progressBox) progressBox.style.display = 'flex';
+          if (startRow) startRow.style.display = 'none';
+          if (activeChip) activeChip.style.display = 'inline-flex';
+          startLiveAgentPolling(job.id);
           refreshLiveAgentView();
         } catch (err) {
           toast('Failed to start live monitor', 'error');
@@ -3819,8 +4873,16 @@
 
     // Live preview sync inside Create section (#/create)
     const processUrlInput = document.getElementById('process-url');
+    const btnProcessClear = document.getElementById('btn-process-clear-url');
     if (processUrlInput) {
+      const syncProcessClearBtn = () => {
+        if (btnProcessClear) {
+          btnProcessClear.style.display = processUrlInput.value && processUrlInput.value.trim().length > 0 ? 'flex' : 'none';
+        }
+      };
+
       const updateCreatePreview = () => {
+        syncProcessClearBtn();
         const previewBox = document.getElementById('create-live-preview-box');
         const previewIframe = document.getElementById('create-live-preview-iframe');
         if (!previewBox || !previewIframe) return;
@@ -3842,6 +4904,20 @@
 
       processUrlInput.addEventListener('input', updateCreatePreview);
       processUrlInput.addEventListener('change', updateCreatePreview);
+
+      if (btnProcessClear) {
+        btnProcessClear.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          processUrlInput.value = '';
+          syncProcessClearBtn();
+          updateCreatePreview();
+          toast('URL input cleared', 'info');
+          processUrlInput.focus();
+        });
+      }
+
+      syncProcessClearBtn();
     }
   }
 
@@ -3854,6 +4930,7 @@
     initSidebarControls();
     initAccountSwitcher();
     initPublishAccountModal();
+    initAutoSchedulerModal();
     initVideoModals();
     initControls();
     initCreateModes();

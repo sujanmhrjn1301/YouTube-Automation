@@ -29,6 +29,19 @@ def main() -> None:
         default=0.0,
         help="Optional key moment timestamp in seconds (e.g. 4210 for Warden fight)",
     )
+    parser.add_argument(
+        "--prompt",
+        type=str,
+        default="",
+        help="Custom scene directives or timestamps to pin (e.g. 'find the dragon fight at 14:20')",
+    )
+    parser.add_argument(
+        "--search-engine",
+        type=str,
+        default="both",
+        choices=["both", "hybrid", "twelvelabs"],
+        help="AI scene search engine: 'both' (Ensemble), 'hybrid' (Option 1), 'twelvelabs' (Option 2)",
+    )
 
     args = parser.parse_args()
 
@@ -46,6 +59,8 @@ def main() -> None:
         url=args.url,
         focus_timestamp=focus_ts,
         target_runtime_sec=args.target_runtime,
+        prompt=args.prompt,
+        search_engine=args.search_engine,
     )
     print(f"\n[OK] Video generated successfully: {res['output_path']}")
 

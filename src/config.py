@@ -66,6 +66,7 @@ class Settings:
     OPENROUTER_API_KEY: Optional[str] = os.getenv("OPENROUTER_API_KEY")
     OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
     HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN")
+    TWELVELABS_API_KEY: Optional[str] = os.getenv("TWELVELABS_API_KEY")
 
     # Supabase (Database & Storage)
     SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")

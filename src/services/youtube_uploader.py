@@ -207,17 +207,16 @@ class YouTubeUploaderService:
         from src.services.database import DatabaseService
         db_service = DatabaseService()
         quota = db_service.get_daily_quota_status()
-        if not quota["can_upload"]:
-            log_warning(
+        uploads_today = quota.get("uploads_today", 0)
+        if uploads_today >= 6:
+            log_info(
                 "YOUTUBE_UPLOADER",
-                f"⛔ Daily YouTube Upload Quota Limit Reached ({quota['units_used']}/{quota['max_daily_units']} units used today, ~{quota['uploads_today']} uploads).\n"
-                f"   Skipping YouTube upload to prevent API quota lockout. Short is safely preserved locally at: {video_path}"
+                f"Daily baseline reached ({uploads_today}/6+ uploads completed today). Proceeding with upload to YouTube...",
             )
-            return None
         else:
             log_info(
                 "YOUTUBE_UPLOADER",
-                f"YouTube Quota: {quota['units_used']}/{quota['max_daily_units']} units used ({quota['remaining_units']} remaining, {quota['uploads_today']} uploads today)."
+                f"YouTube Upload Progress: {uploads_today}/6 completed today.",
             )
 
         # 2MB chunk size for reliable resumable upload

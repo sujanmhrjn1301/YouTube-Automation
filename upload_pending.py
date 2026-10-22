@@ -43,15 +43,19 @@ def run_pending_upload(upload_all: bool = False) -> None:
     db_service = DatabaseService()
     uploader = YouTubeUploaderService()
 
-    # 1. Check daily YouTube API quota
+    # 1. Check daily YouTube upload progress (allow beyond 6, baseline target is 6)
     quota = db_service.get_daily_quota_status()
-    if not quota["can_upload"]:
-        log_warning(
+    uploads_today = quota.get("uploads_today", 0)
+    if uploads_today >= 6:
+        log_info(
             "UPLOADER",
-            f"⛔ YouTube Upload Quota Limit Reached ({quota['units_used']}/{quota['max_daily_units']} units used today).\n"
-            f"   Cannot upload right now to avoid API lockout. Resets at midnight PST.",
+            f"Daily baseline reached ({uploads_today}/6+ uploads completed today). Proceeding with upload...",
         )
-        return
+    else:
+        log_info(
+            "UPLOADER",
+            f"Daily upload progress: {uploads_today}/6 uploads completed today.",
+        )
 
     # 2. Query pending Shorts
     pending = db_service.get_pending_shorts(limit=50)
