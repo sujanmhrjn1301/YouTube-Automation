@@ -52,7 +52,7 @@ DEFAULT_ACCOUNTS_CONFIG = {
         {
             "id": "official",
             "email": "maharjansujan.official@gmail.com",
-            "name": "Official Channel",
+            "name": "Suzzane",
             "handle": "@MR.EIJI05",
             "token_file": "tokens/token_official.json",
         },

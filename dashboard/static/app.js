@@ -3229,7 +3229,7 @@
       ? state.accounts.accounts
       : [
         { id: 'alternate', name: 'Eiji Shorts', email: 'mhrznsuzan.alternate@gmail.com', handle: '@eijishorts', authenticated: true },
-        { id: 'official', name: 'Official Channel', email: 'maharjansujan.official@gmail.com', handle: '@MR.EIJI05', authenticated: true }
+        { id: 'official', name: 'Suzzane', email: 'maharjansujan.official@gmail.com', handle: '@MR.EIJI05', authenticated: true }
       ];
 
     const currentActiveId = (state.accounts && state.accounts.active_id) || 'alternate';
@@ -3372,7 +3372,7 @@
     const accounts = (state.accounts && state.accounts.accounts) || [];
     const chosenAccount = accounts.find(a => a.id === chosenId) || {
       id: chosenId,
-      name: chosenId === 'official' ? 'Official Channel' : 'Eiji Shorts',
+      name: chosenId === 'official' ? 'Suzzane' : 'Eiji Shorts',
       email: chosenId === 'official' ? 'maharjansujan.official@gmail.com' : 'mhrznsuzan.alternate@gmail.com',
       handle: chosenId === 'official' ? '@MR.EIJI05' : '@eijishorts'
     };
