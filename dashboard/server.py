@@ -194,7 +194,7 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
             argv.append("--captions")
         else:
             argv.append("--no-captions")
-        if opts.get("noBleep"):
+        if not opts.get("bleep") or opts.get("noBleep"):
             argv.append("--no-bleep-profanity")
         if opts.get("keepRaw"):
             argv.append("--keep-raw")
@@ -226,7 +226,7 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
             argv.append("--captions")
         else:
             argv.append("--no-captions")
-        if opts.get("noBleep"):
+        if not opts.get("bleep") or opts.get("noBleep"):
             argv.append("--no-bleep-profanity")
         return argv
 
@@ -276,6 +276,8 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
         cmd = [py, "dashboard/upload_single.py", "--id", short_id]
         if opts.get("publish_at"):
             cmd.extend(["--publish-at", str(opts["publish_at"])])
+        if opts.get("title"):
+            cmd.extend(["--title", str(opts["title"]).strip()])
         return cmd
     if kind == "upload_all":
         return [py, "cli.py", "--upload-all-pending"]
@@ -292,6 +294,18 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
         return [py, "cli.py", "--doctor"]
     if kind == "auth":
         return [py, "cli.py", "--auth-youtube"]
+    if kind == "instagram":
+        short_id = str(opts.get("id", "")).strip()
+        if not short_id or not short_id.isdigit():
+            raise ValueError("Valid Short ID is required.")
+        cmd = [py, "publish_instagram.py", "--id", short_id]
+        caption = str(opts.get("caption", "")).strip()
+        if caption:
+            cmd.extend(["--caption", caption])
+        title = str(opts.get("title", "")).strip()
+        if title:
+            cmd.extend(["--title", title])
+        return cmd
     if kind == "clean":
         return [py, "cli.py", "--clean-cache"]
 
@@ -303,6 +317,7 @@ LABELS = {
     "monitor": "Live Agent",
     "longform": "Longform Video Editor",
     "montage": "Viral Montage Builder",
+    "instagram": "Instagram Reels Publisher",
     "upload_next": "Publish next",
     "upload_single": "Publish Short",
     "upload_all": "Publish all",
@@ -510,9 +525,208 @@ def _db() -> Optional[sqlite3.Connection]:
     return conn
 
 
+def _db_write() -> Optional[sqlite3.Connection]:
+    if not DB_PATH.exists():
+        return None
+    conn = sqlite3.connect(DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def probe_local_video_duration(video_path: Path) -> float:
+    try:
+        import cv2
+        cap = cv2.VideoCapture(str(video_path))
+        if cap.isOpened():
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            cap.release()
+            if frame_count > 0 and fps > 0:
+                return round(frame_count / fps, 2)
+    except Exception:
+        pass
+    try:
+        cmd = [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout.strip():
+            return round(float(res.stdout.strip()), 2)
+    except Exception:
+        pass
+    return 60.0
+
+
+def sync_local_disk_videos_to_library() -> None:
+    """
+    Scans output/ and output/longform_videos/ for local MP4 files that are not yet
+    registered in SQLite or Supabase table, ensuring that any large or long videos
+    which exceed Supabase Free Tier (50MB / 1GB quota) are tracked and visible in
+    Pending Uploads.
+    """
+    if not DB_PATH.exists():
+        return
+    output_dir = ROOT / "output"
+    longform_dir = output_dir / "longform_videos"
+
+    candidates: List[Path] = []
+    if longform_dir.is_dir():
+        candidates.extend(longform_dir.glob("*.mp4"))
+    if output_dir.is_dir():
+        candidates.extend(output_dir.glob("*.mp4"))
+
+    valid_files: List[Path] = []
+    for f in candidates:
+        name_lower = f.name.lower()
+        if (
+            name_lower.startswith("temp_")
+            or name_lower.startswith("preview_")
+            or name_lower.startswith("segment_")
+            or name_lower.startswith("crop_")
+            or name_lower.startswith("cloud_")
+            or name_lower.startswith("source_")
+            or f.stat().st_size < 10000
+            or (time.time() - f.stat().st_mtime) < 45  # Skip files being actively rendered/written
+        ):
+            continue
+        valid_files.append(f)
+
+    if not valid_files:
+        return
+
+    known_paths = set()
+    known_filenames = set()
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro", uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT id, local_path, hook_title FROM shorts_metadata").fetchall()
+        for r in rows:
+            lp = r["local_path"]
+            if lp:
+                try:
+                    known_paths.add(Path(lp).resolve())
+                    known_filenames.add(Path(lp).name.lower())
+                except Exception:
+                    pass
+        conn.close()
+    except Exception:
+        pass
+
+    for vf in valid_files:
+        try:
+            vf_resolved = vf.resolve()
+            if vf_resolved in known_paths or vf.name.lower() in known_filenames:
+                continue
+
+            size_mb = vf.stat().st_size / (1024 * 1024)
+            duration = probe_local_video_duration(vf)
+            stem = vf.stem
+            is_long = "feature_" in stem.lower() or "longform" in stem.lower() or duration > 180
+
+            clean_title = stem.replace("Feature_", "").replace("_longform", "").replace("_Shorts", "").replace("_", " ")
+            if is_long:
+                title = f"{clean_title.strip()} (Full Feature)"
+            else:
+                title = f"{clean_title.strip()} #Shorts"
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            new_id = None
+
+            conn = sqlite3.connect(DB_PATH, timeout=5)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO shorts_metadata (
+                    source_url, source_video_id, source_title, hook_title,
+                    description, tags, viral_reasoning, hook_score,
+                    start_time, end_time, duration, storage_url, local_path,
+                    youtube_id, created_at, part_number, total_parts,
+                    is_confirmed_uploaded
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                f"file://{vf_resolved}",
+                "feature" if is_long else "local_clip",
+                clean_title,
+                title,
+                f"{title}\n\nProduced locally in Studio Pipeline.",
+                "feature,gaming,viral,youtube" if is_long else "Shorts,Viral",
+                "Saved locally on disk (exceeds Supabase 50MB free quota)" if size_mb > 48 else "Local video",
+                95.0 if is_long else 90.0,
+                0.0,
+                duration,
+                duration,
+                "",  # empty storage_url: 0 bytes Supabase bucket quota
+                str(vf_resolved),
+                "",
+                now_iso,
+                1,
+                1,
+                0,
+            ))
+            conn.commit()
+            new_id = cur.lastrowid
+            conn.close()
+
+            # Also register in Supabase table (text record only with storage_url="")
+            client = get_supabase_client()
+            if client and new_id:
+                try:
+                    client.table("shorts_metadata").insert({
+                        "id": new_id,
+                        "source_url": f"file://{vf_resolved}",
+                        "source_video_id": "feature" if is_long else "local_clip",
+                        "source_title": clean_title,
+                        "hook_title": title,
+                        "description": f"{title}\n\nProduced locally in Studio Pipeline.",
+                        "tags": "feature,gaming,viral,youtube" if is_long else "Shorts,Viral",
+                        "viral_reasoning": "Saved locally on disk (exceeds Supabase 50MB free quota)" if size_mb > 48 else "Local video",
+                        "hook_score": 95.0 if is_long else 90.0,
+                        "start_time": 0.0,
+                        "end_time": duration,
+                        "duration": duration,
+                        "storage_url": "",
+                        "youtube_id": None,
+                        "created_at": now_iso,
+                        "part_number": 1,
+                        "total_parts": 1,
+                        "is_confirmed_uploaded": False,
+                    }).execute()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
 def get_library(limit: int = 200) -> List[Dict[str, Any]]:
+    # 1. Sync any local disk files not yet recorded
+    try:
+        sync_local_disk_videos_to_library()
+    except Exception:
+        pass
+
+    # 2. Read all local SQLite records (always available, preserves local_path and offline clips)
+    sqlite_all: List[Dict[str, Any]] = []
+    sqlite_by_id: Dict[int, Dict[str, Any]] = {}
+    sqlite_by_title: Dict[str, Dict[str, Any]] = {}
+    conn = _db()
+    if conn:
+        try:
+            rows = conn.execute("SELECT * FROM shorts_metadata ORDER BY id DESC").fetchall()
+            for r in rows:
+                rd = dict(r)
+                sqlite_all.append(rd)
+                if rd.get("id"):
+                    sqlite_by_id[int(rd["id"])] = rd
+                if rd.get("hook_title"):
+                    sqlite_by_title[rd["hook_title"].strip().lower()] = rd
+        except sqlite3.Error:
+            pass
+        finally:
+            conn.close()
+
+    # 3. Fetch from Supabase
     client = get_supabase_client()
-    raw_rows = []
+    raw_rows: List[Dict[str, Any]] = []
     from_supabase = False
 
     if client:
@@ -524,39 +738,94 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
         except Exception:
             raw_rows = []
 
-    # If Supabase not connected or errored, fallback to local SQLite
-    if not from_supabase:
-        conn = _db()
-        if conn:
-            try:
-                rows = conn.execute("SELECT * FROM shorts_metadata ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-                raw_rows = [dict(r) for r in rows]
-            except sqlite3.Error:
-                raw_rows = []
-            finally:
-                conn.close()
+    # 4. Merge Supabase & SQLite records
+    if from_supabase and raw_rows:
+        sb_ids = set()
+        for d in raw_rows:
+            rid = int(d.get("id") or 0)
+            if rid:
+                sb_ids.add(rid)
+            local_rec = sqlite_by_id.get(rid) or sqlite_by_title.get(str(d.get("hook_title") or "").strip().lower())
+            if local_rec:
+                if not d.get("local_path") and local_rec.get("local_path"):
+                    d["local_path"] = local_rec["local_path"]
+                if not d.get("scheduled_publish_at") and local_rec.get("scheduled_publish_at"):
+                    d["scheduled_publish_at"] = local_rec["scheduled_publish_at"]
+                if not d.get("storage_url") and local_rec.get("storage_url"):
+                    d["storage_url"] = local_rec["storage_url"]
+                if not d.get("youtube_id") and local_rec.get("youtube_id"):
+                    d["youtube_id"] = local_rec["youtube_id"]
+                if not d.get("instagram_url") and local_rec.get("instagram_url"):
+                    d["instagram_url"] = local_rec["instagram_url"]
+                if not d.get("instagram_id") and local_rec.get("instagram_id"):
+                    d["instagram_id"] = local_rec["instagram_id"]
 
-    # If authoritative from Supabase, prune any orphaned records in local SQLite that were deleted from Supabase
-    if from_supabase and raw_rows and DB_PATH.exists():
-        try:
-            sb_ids = [int(r["id"]) for r in raw_rows if r.get("id")]
-            if sb_ids:
-                sync_conn = sqlite3.connect(DB_PATH, timeout=5)
-                placeholders = ",".join("?" for _ in sb_ids)
-                sync_conn.execute(f"DELETE FROM shorts_metadata WHERE id NOT IN ({placeholders})", sb_ids)
-                sync_conn.commit()
-                sync_conn.close()
-        except Exception:
-            pass
+        # Append any local SQLite records that are NOT in Supabase (e.g. offline or local-only)
+        for rd in sqlite_all:
+            if int(rd.get("id") or 0) not in sb_ids:
+                raw_rows.append(rd)
+        raw_rows.sort(key=lambda x: int(x.get("id") or 0), reverse=True)
+    else:
+        raw_rows = sqlite_all[:limit]
+
+    # Deduplicate raw_rows by physical filename so duplicate placeholder cards are never displayed
+    deduped_rows = []
+    seen_files = set()
+    for row in raw_rows:
+        lp = row.get("local_path")
+        fn = Path(lp).name.lower() if lp else ""
+        if fn and fn in seen_files:
+            continue
+        if fn:
+            seen_files.add(fn)
+        deduped_rows.append(row)
+    raw_rows = deduped_rows
 
     items = []
+    db_service = None
+    try:
+        from src.services.database import DatabaseService
+        db_service = DatabaseService()
+    except Exception:
+        pass
+
     for d in raw_rows:
         url = d.get("storage_url") or ""
         yt = (d.get("youtube_id") or "").strip()
         local = d.get("local_path") or ""
+
+        # Locate local file on disk
+        local_file: Optional[Path] = None
+        if local and Path(local).is_file():
+            local_file = Path(local)
+        elif db_service:
+            try:
+                found = db_service.find_local_video(d)
+                if found and found.is_file():
+                    local_file = found
+                    local = str(found)
+            except Exception:
+                pass
+
+        has_local = bool(local_file and local_file.is_file())
+        file_size_mb = round(local_file.stat().st_size / (1024 * 1024), 2) if has_local else 0.0
+        is_local_only = has_local and (not url or url.strip() == "")
+
         url_str = str(url).lower()
         local_str = str(local).replace("\\", "/").lower()
-        if "longform-videos" in url_str or "longform_videos" in local_str or "feature_" in local_str:
+        title_str = str(d.get("hook_title") or "").lower()
+        duration_val = float(d.get("duration") or 0.0)
+
+        if (
+            duration_val > 180
+            or "longform-videos" in url_str
+            or "longform_videos" in local_str
+            or "feature_" in local_str
+            or "feature_" in title_str
+            or "(full feature)" in title_str
+            or "(full raid)" in title_str
+            or "(full story)" in title_str
+        ):
             source = "longform"
         elif "livestream-shorts" in url_str or "livestreams_clips" in url_str or "livestream_agent" in local_str or "_live_" in local_str:
             source = "live"
@@ -564,17 +833,8 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
             source = "post_live"
         else:
             source = "standard"
-        scheduled_at = d.get("scheduled_publish_at")
-        if not scheduled_at and DB_PATH.exists() and d.get("id"):
-            try:
-                lconn = sqlite3.connect(DB_PATH, timeout=2)
-                lrow = lconn.execute("SELECT scheduled_publish_at FROM shorts_metadata WHERE id = ?", (d.get("id"),)).fetchone()
-                lconn.close()
-                if lrow and lrow[0]:
-                    scheduled_at = lrow[0]
-            except Exception:
-                pass
 
+        scheduled_at = d.get("scheduled_publish_at")
         is_scheduled_pending = False
         is_scheduled_released = False
         if scheduled_at:
@@ -589,6 +849,10 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
                     is_scheduled_released = True
             except Exception:
                 is_scheduled_pending = True
+
+        ig_id = (d.get("instagram_id") or "").strip()
+        ig_url = (d.get("instagram_url") or "").strip()
+        ig_uploaded = bool(ig_id or ig_url or d.get("instagram_published_at"))
 
         items.append({
             "id": d.get("id"),
@@ -605,12 +869,18 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
             "videoUrl": f"/api/video?id={d.get('id')}",
             "youtubeId": yt or None,
             "uploaded": bool(yt) or bool(d.get("is_confirmed_uploaded")) or is_scheduled_released,
+            "youtubeUploaded": bool(yt) or bool(d.get("is_confirmed_uploaded")),
+            "instagramId": ig_id or None,
+            "instagramUrl": ig_url or None,
+            "instagramUploaded": ig_uploaded,
             "scheduledAt": scheduled_at if is_scheduled_pending else None,
             "originalScheduledAt": scheduled_at or None,
             "isScheduledPending": is_scheduled_pending,
             "isScheduledReleased": is_scheduled_released,
-            "hasLocal": bool(local) and Path(local).exists(),
-            "localPath": local if (bool(local) and Path(local).exists()) else None,
+            "hasLocal": has_local,
+            "localPath": local if has_local else None,
+            "isLocalOnly": is_local_only,
+            "fileSizeMb": file_size_mb,
             "created": d.get("created_at"),
             "source": source,
         })
@@ -1026,34 +1296,58 @@ class Handler(BaseHTTPRequestHandler):
             short_id = _clamp_int((qs.get("id") or ["0"])[0], 0, 10**9, 0)
             storage_url = None
             local_path = None
+            row_dict = None
+
+            # 1. Check local SQLite first
+            conn = _db()
+            if conn:
+                try:
+                    row = conn.execute("SELECT * FROM shorts_metadata WHERE id = ?", (short_id,)).fetchone()
+                    if row:
+                        row_dict = dict(row)
+                        storage_url = row_dict.get("storage_url")
+                        local_path = row_dict.get("local_path")
+                except sqlite3.Error:
+                    pass
+                finally:
+                    conn.close()
+
+            # 2. Check Supabase
             client = get_supabase_client()
             if client:
                 try:
-                    res = client.table("shorts_metadata").select("storage_url").eq("id", short_id).execute()
+                    res = client.table("shorts_metadata").select("*").eq("id", short_id).execute()
                     if res.data:
-                        storage_url = res.data[0].get("storage_url")
+                        sb_row = res.data[0]
+                        if not row_dict:
+                            row_dict = sb_row
+                        if not storage_url:
+                            storage_url = sb_row.get("storage_url")
                 except Exception:
                     pass
-            if not storage_url and not local_path:
-                conn = _db()
-                if conn:
-                    try:
-                        row = conn.execute("SELECT storage_url, local_path FROM shorts_metadata WHERE id = ?", (short_id,)).fetchone()
-                        if row:
-                            storage_url = row["storage_url"]
-                            local_path = row["local_path"]
-                    except sqlite3.Error:
-                        pass
-                    finally:
-                        conn.close()
 
+            # 3. Direct local file if valid
             if local_path and Path(local_path).is_file():
                 return self._serve_video_file(Path(local_path))
-            elif storage_url:
+
+            # 4. Fallback search via find_local_video
+            if row_dict:
+                try:
+                    from src.services.database import DatabaseService
+                    db_serv = DatabaseService()
+                    found = db_serv.find_local_video(row_dict)
+                    if found and found.is_file():
+                        return self._serve_video_file(found)
+                except Exception:
+                    pass
+
+            # 5. Redirect to Supabase cloud storage if exists
+            if storage_url and storage_url.strip():
                 self.send_response(302)
                 self.send_header("Location", storage_url)
                 self.end_headers()
                 return
+
             return self._json({"error": "no video found"}, 404)
         m = re.fullmatch(r"/api/jobs/([a-f0-9]{10})/log", path)
         if m:
@@ -1064,6 +1358,14 @@ class Handler(BaseHTTPRequestHandler):
             with job.lock:
                 lines = [l for l in job.lines if l["n"] > after]
             return self._json({"job": job.summary(), "lines": lines})
+
+        if path == "/api/instagram/account":
+            try:
+                from src.services.instagram_publisher import InstagramPublisher
+                pub = InstagramPublisher()
+                return self._json(pub.get_account_profile())
+            except Exception as e:
+                return self._json({"configured": False, "connected": False, "error": str(e)})
 
         # Static files
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
@@ -1088,6 +1390,42 @@ class Handler(BaseHTTPRequestHandler):
         if not self._same_origin():
             return self._json({"error": "forbidden"}, 403)
         path = urlparse(self.path).path
+        if path == "/api/publish/rename":
+            body = self._read_json()
+            short_id = _clamp_int(body.get("id"), 0, 10**9, 0)
+            new_title = str(body.get("title", "")).strip()
+            if not short_id or not new_title:
+                return self._json({"error": "Missing short id or title"}, 400)
+            conn = _db_write()
+            if conn:
+                try:
+                    conn.execute("UPDATE shorts_metadata SET hook_title = ? WHERE id = ?", (new_title, short_id))
+                    conn.commit()
+                except Exception as e:
+                    return self._json({"error": f"Database update failed: {e}"}, 500)
+                finally:
+                    conn.close()
+            client = get_supabase_client()
+            if client:
+                try:
+                    client.table("shorts_metadata").update({"hook_title": new_title}).eq("id", short_id).execute()
+                except Exception:
+                    pass
+            return self._json({"success": True, "id": short_id, "title": new_title})
+        if path == "/api/instagram/publish":
+            body = self._read_json()
+            short_id = str(body.get("id", "")).strip()
+            caption = str(body.get("caption", "")).strip()
+            title = str(body.get("title", "")).strip()
+            if not short_id:
+                return self._json({"error": "Missing short id"}, 400)
+            try:
+                job = JOBS.start("instagram", {"id": short_id, "caption": caption, "title": title})
+            except ValueError as e:
+                return self._json({"error": str(e)}, 400)
+            except OSError as e:
+                return self._json({"error": f"Could not start process: {e}"}, 500)
+            return self._json(job.summary(), 201)
         if path == "/api/run":
             body = self._read_json()
             try:

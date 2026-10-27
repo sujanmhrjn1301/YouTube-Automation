@@ -67,6 +67,7 @@ class Settings:
     OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
     HF_TOKEN: Optional[str] = os.getenv("HF_TOKEN")
     TWELVELABS_API_KEY: Optional[str] = os.getenv("TWELVELABS_API_KEY")
+    WHISPER_MODEL_SIZE: str = os.getenv("WHISPER_MODEL_SIZE", "base")
 
     # Supabase (Database & Storage)
     SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
@@ -87,6 +88,23 @@ class Settings:
     )
     YOUTUBE_TARGET_EMAIL: str = os.getenv("YOUTUBE_TARGET_EMAIL", "maharjansujan.official@gmail.com")
     YOUTUBE_TARGET_HANDLE: str = os.getenv("YOUTUBE_TARGET_HANDLE", "@MR.EIJI05")
+
+    try:
+        _acc_file = BASE_DIR / "dashboard" / "accounts.json"
+        if _acc_file.exists():
+            import json as _json
+            with open(_acc_file, "r", encoding="utf-8") as _f:
+                _acc_data = _json.load(_f)
+            _act_id = _acc_data.get("active_id")
+            for _a in _acc_data.get("accounts", []):
+                if _a.get("id") == _act_id:
+                    if _a.get("handle"):
+                        YOUTUBE_TARGET_HANDLE = _a.get("handle")
+                    if _a.get("email"):
+                        YOUTUBE_TARGET_EMAIL = _a.get("email")
+                    break
+    except Exception:
+        pass
 
     # FFmpeg Binary Path
     FFMPEG_PATH: str = resolve_ffmpeg_path()

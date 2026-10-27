@@ -82,21 +82,31 @@ class PeakDetectorService:
         self,
         wav_path: Path,
         total_duration: float,
-        window_duration: float = 90.0,
+        window_duration: float = 180.0,
         top_k: int = 3,
         heatmap_points: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Tuple[float, float, float]]:
         """
-        Identify top K non-overlapping peak windows (e.g. 90-120s each) combining
-        audio RMS spikes and optional YouTube heatmap curves.
+        Identify top K non-overlapping peak windows combining audio RMS spikes
+        and optional YouTube heatmap curves.
+        Guarantees extracting top_k distinct candidate windows by dynamically adapting
+        window duration and using progressive gap relaxation.
         Returns: [(window_start, window_end, peak_score), ...]
         """
-        if total_duration <= window_duration:
-            return [(0.0, total_duration, 1.0)]
+        if top_k <= 1:
+            if total_duration <= window_duration:
+                return [(0.0, total_duration, 1.0)]
+
+        # Dynamically adapt window duration if requested clips cannot physically fit
+        if top_k > 1:
+            if (window_duration * top_k) > (total_duration * 0.95) and total_duration >= 45.0:
+                window_duration = max(35.0, min(window_duration, (total_duration / top_k) * 1.15))
+            if total_duration < window_duration:
+                window_duration = max(20.0, total_duration)
 
         audio_energy = self.compute_audio_energy(wav_path)
         if not audio_energy:
-            step = total_duration / (top_k + 1)
+            step = max(10.0, (total_duration - window_duration) / max(1, top_k + 1))
             return [(round(i * step, 1), round(min(total_duration, i * step + window_duration), 1), 0.8) for i in range(1, top_k + 1)]
 
         num_secs = int(math.ceil(total_duration))
@@ -119,16 +129,20 @@ class PeakDetectorService:
 
         win_size = int(window_duration)
         window_scores: List[Tuple[int, float]] = []
+        scan_step = max(2, min(10, int(window_duration // 10)))
 
-        for start_sec in range(0, max(1, num_secs - win_size), 10):
+        for start_sec in range(0, max(1, num_secs - win_size), scan_step):
             w_score = float(np.mean(combined_scores[start_sec : start_sec + win_size]))
             window_scores.append((start_sec, w_score))
 
         window_scores.sort(key=lambda x: x[1], reverse=True)
 
-        selected_windows: List[Tuple[float, float, float]] = []
-        min_gap = window_duration * 0.8
+        ideal_gap = (total_duration - window_duration) / max(1, top_k)
+        min_gap = max(20.0, min(window_duration * 0.75, ideal_gap * 0.9))
 
+        selected_windows: List[Tuple[float, float, float]] = []
+
+        # Pass 1: Strict peak selection with ideal gap
         for start_sec, score in window_scores:
             end_sec = min(total_duration, start_sec + window_duration)
             overlaps = any(abs(start_sec - sw[0]) < min_gap for sw in selected_windows)
@@ -137,9 +151,38 @@ class PeakDetectorService:
                 if len(selected_windows) >= top_k:
                     break
 
+        # Pass 2: Progressive gap relaxation to guarantee reaching top_k
+        for gap_factor in [0.6, 0.4, 0.25]:
+            if len(selected_windows) >= top_k:
+                break
+            relaxed_gap = max(15.0, min_gap * gap_factor)
+            for start_sec, score in window_scores:
+                end_sec = min(total_duration, start_sec + window_duration)
+                if not any(abs(start_sec - sw[0]) < relaxed_gap for sw in selected_windows):
+                    selected_windows.append((float(start_sec), float(end_sec), round(score, 3)))
+                    if len(selected_windows) >= top_k:
+                        break
+
+        # Pass 3: Evenly-spaced filler across timeline if still under top_k
+        if len(selected_windows) < top_k and total_duration >= 30.0:
+            step = (total_duration - window_duration) / max(1, top_k + 1)
+            for i in range(1, top_k + 2):
+                cand_start = round(i * step, 1)
+                if cand_start + window_duration > total_duration:
+                    cand_start = max(0.0, total_duration - window_duration)
+                if not any(abs(cand_start - sw[0]) < 12.0 for sw in selected_windows):
+                    s_idx = max(0, min(num_secs - 1, int(cand_start)))
+                    e_idx = max(0, min(num_secs, int(cand_start + window_duration)))
+                    sc = float(np.mean(combined_scores[s_idx:e_idx])) if e_idx > s_idx else 0.5
+                    selected_windows.append((float(cand_start), float(min(total_duration, cand_start + window_duration)), round(sc, 3)))
+                    if len(selected_windows) >= top_k:
+                        break
+
         selected_windows.sort(key=lambda x: x[0])
+        selected_windows = selected_windows[:top_k]
         log_success(
             "PEAK_DETECTOR",
-            f"Identified {len(selected_windows)} high-energy viral candidate windows across {total_duration / 60:.1f} mins.",
+            f"Identified {len(selected_windows)} high-energy viral candidate windows across {total_duration / 60:.1f} mins (Target: {top_k}).",
         )
         return selected_windows
+

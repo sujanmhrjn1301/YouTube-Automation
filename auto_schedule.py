@@ -85,8 +85,7 @@ def main():
             cid = c.get("id")
             title = c.get("hook_title") or f"Short #{cid}"
             part = c.get("part_number") or 1
-            dur = c.get("duration") or 0.0
-            console.print(f"  {idx}. [bold white]#{cid}[/bold white] (Part {part}, {dur:.1f}s) - [bold yellow]{title}[/bold yellow]")
+            console.print(f"  {idx}. [bold white]#{cid}[/bold white] ({dur:.1f}s) - [bold yellow]{title}[/bold yellow]")
         console.print()
         sys.exit(0)
 

@@ -146,7 +146,6 @@ class MontageComposer:
         cmd = [
             "yt-dlp",
             "--ffmpeg-location", self.ffmpeg_dir,
-            "--extractor-args", "youtube:player_client=android",
             "--dump-json",
             url_or_path,
         ]
@@ -258,7 +257,9 @@ class MontageComposer:
             target_duration = adapted_target
 
         # Determine number of clips and average clip length
-        num_clips = max(6, min(clip_count, int(target_duration // 22)))
+        min_clips = min(3, max(1, clip_count))
+        max_clips_for_target = max(min_clips, int(target_duration // 15))
+        num_clips = max(min_clips, min(clip_count, max_clips_for_target))
         avg_clip_len = target_duration / num_clips
         window_len = max(16.0, min(36.0, avg_clip_len))
 
@@ -401,26 +402,26 @@ class MontageComposer:
                 cmd = [
                     "yt-dlp",
                     "--ffmpeg-location", self.ffmpeg_dir,
-                    "--extractor-args", "youtube:player_client=android",
                     "--download-sections", f"*{st:.1f}-{et:.1f}",
                     "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best",
+                    "--merge-output-format", "mp4",
                     "-o", str(out_clip),
                     url_or_path,
                 ]
-                subprocess.run(cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=120)
+                subprocess.run(cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=180)
 
                 if not out_clip.exists() or out_clip.stat().st_size < 10000:
                     # Fallback single-stream format if split audio/video fails
                     cmd_fb = [
                         "yt-dlp",
                         "--ffmpeg-location", self.ffmpeg_dir,
-                        "--extractor-args", "youtube:player_client=android",
                         "--download-sections", f"*{st:.1f}-{et:.1f}",
-                        "-f", "18/best",
+                        "-f", "bestvideo+bestaudio/18/best",
+                        "--merge-output-format", "mp4",
                         "-o", str(out_clip),
                         url_or_path,
                     ]
-                    subprocess.run(cmd_fb, capture_output=True, env=self._get_ffmpeg_env(), timeout=90)
+                    subprocess.run(cmd_fb, capture_output=True, env=self._get_ffmpeg_env(), timeout=120)
 
             if out_clip.exists() and out_clip.stat().st_size > 10000:
                 extracted.append(out_clip)
@@ -481,14 +482,7 @@ class MontageComposer:
                     f"[v_base][v_zoomed]overlay=0:0:enable='between(t\\,{p_st:.2f}\\,{p_et:.2f})'"
                 )
 
-            # 3. Modern Glassmorphic Lower-Third Badge (First 3.2s of each clip)
-            # Semi-transparent dark pill + Accent top strip + Crisp typography
-            card_filter = (
-                f"drawbox=y=ih-120:color=black@0.75:width=iw:height=70:t=fill:enable='between(t\\,0.4\\,3.6)',"
-                f"drawbox=y=ih-122:color={bar}@0.95:width=iw:height=3:t=fill:enable='between(t\\,0.4\\,3.6)',"
-                f"drawtext=fontfile='{font_file}':text='{badge_text}':fontcolor=white:fontsize=28:x=(w-text_w)/2:y=h-96:enable='between(t\\,0.4\\,3.6)'"
-            )
-            vf_chain.append(card_filter)
+
 
             full_filter = ",".join(vf_chain)
 

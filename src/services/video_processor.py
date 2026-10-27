@@ -90,10 +90,11 @@ class VideoProcessorService:
         if bleep_intervals:
             conds = "+".join(f"between(t,{s:.2f},{e:.2f})" for s, e, _ in bleep_intervals)
             a_filter = (
-                f"[0:a]volume=enable='{conds}':volume=0[clean_a];"
-                f"sine=frequency=1000:duration={dur:.2f},volume=enable='{conds}':volume=0.35[beep_a];"
+                f"[0:a]volume='if({conds},0,1)':eval=frame[clean_a];"
+                f"sine=frequency=1000:duration={dur:.2f},volume='if({conds},0.35,0)':eval=frame[beep_a];"
                 f"[clean_a][beep_a]amix=inputs=2:duration=first:dropout_transition=0[aout]"
             )
+
 
         cmd = [
             self.ffmpeg_path,

@@ -1862,6 +1862,33 @@ details.advanced[open] summary .icon {
   box-sizing: border-box !important;
 }
 
+.chip-local-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(96, 165, 250, 0.28) !important;
+  line-height: 1.2 !important;
+  height: 22px !important;
+  box-sizing: border-box !important;
+}
+
+.publish-btn-instagram.is-disabled-longform {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  filter: grayscale(0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
 .chip-ok {
   background: var(--success-surface);
   color: #5bd473;
@@ -2134,6 +2161,36 @@ details.advanced[open] summary .icon {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.lib-delete-btn {
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--spring-fast);
+  line-height: 1;
+}
+
+.lib-delete-btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.lib-delete-btn:hover {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.12);
+  border-color: rgba(255, 77, 79, 0.25);
+  transform: scale(1.08);
+}
+
+.lib-delete-btn:active {
+  transform: scale(0.95);
 }
 
 /* Toolbar & Filter Tabs */
@@ -3225,7 +3282,8 @@ details.advanced[open] summary .icon {
   justify-content: center;
   cursor: pointer;
   transition: all var(--spring-fast);
-  z-index: 5;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .publish-btn-delete:hover {
@@ -3295,6 +3353,40 @@ details.advanced[open] summary .icon {
   overflow: hidden;
   animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Delete Flow States (Confirm, Deleting, Deleted) */
+.delete-dialog-state {
+  animation: modal-pop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.delete-spinner-ring {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 0, 51, 0.2);
+  border-top-color: #ff0033;
+  animation: spin 0.8s linear infinite;
+}
+
+.delete-success-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(43, 166, 64, 0.15);
+  color: #2ba640;
+  border: 1px solid rgba(43, 166, 64, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 24px rgba(43, 166, 64, 0.25);
+  animation: delete-pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes delete-pop-in {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 
 .account-publish-dialog {
   width: 820px;
@@ -4750,30 +4842,134 @@ details.advanced[open] summary .icon {
   }
 }
 
-@media (max-width: 768px) {
-  .app {
-    flex-direction: column;
+@media (max-width: 840px) {
+  .sidebar {
+    width: 68px !important;
+    min-width: 68px !important;
+    padding: 18px 8px !important;
   }
 
-  .sidebar {
+  .sidebar .brand-text,
+  .sidebar .sidebar-toggle-btn,
+  .sidebar .nav-label,
+  .sidebar .nav-text,
+  .sidebar .sidebar-foot-left span:last-child,
+  .sidebar .theme-picker,
+  .sidebar .sidebar-account-header,
+  .sidebar .sidebar-account-details,
+  .sidebar .sidebar-account-toggle-btn,
+  .sidebar .sidebar-resizer {
+    display: none !important;
+  }
+
+  .sidebar .brand {
+    padding: 4px 0 18px 0;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 12px;
+  }
+
+  .sidebar .brand-logo-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sidebar .nav {
+    flex-direction: column !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding-bottom: 0 !important;
+    gap: 2px !important;
+  }
+
+  .sidebar .nav-item {
+    justify-content: center;
+    padding: 10px 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    margin: 0 auto 2px auto;
+  }
+
+  .sidebar .sidebar-account-box {
+    margin-top: auto;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 2px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sidebar .sidebar-account-card {
+    padding: 6px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+
+  .sidebar .sidebar-account-avatar {
+    margin: 0;
+  }
+
+  .sidebar .sidebar-account-menu {
+    left: 74px;
+    bottom: 0;
+    width: 240px;
+    right: auto;
+  }
+
+  /* Overlay drawer state when expanded on narrow screen */
+  .sidebar.mobile-expanded {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px !important;
+    max-width: 82vw !important;
+    z-index: 1000 !important;
+    background: #141417 !important;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.95);
+    padding: 18px 14px !important;
+  }
+
+  .sidebar.mobile-expanded .brand-text,
+  .sidebar.mobile-expanded .sidebar-toggle-btn,
+  .sidebar.mobile-expanded .nav-label,
+  .sidebar.mobile-expanded .nav-text,
+  .sidebar.mobile-expanded .sidebar-account-header,
+  .sidebar.mobile-expanded .sidebar-account-details,
+  .sidebar.mobile-expanded .sidebar-account-toggle-btn {
+    display: flex !important;
+  }
+
+  .sidebar.mobile-expanded .nav-item {
+    justify-content: flex-start;
+    padding: 9px 12px;
     width: 100%;
     height: auto;
-    border-right: none;
-    padding: 12px 16px;
+    border-radius: var(--radius-md);
   }
 
-  .nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-
-  .nav-label {
-    display: none;
+  .sidebar.mobile-expanded .sidebar-account-card {
+    border-radius: var(--radius-md);
+    width: 100%;
+    height: auto;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    justify-content: flex-start;
   }
 
   .view {
-    padding: 16px;
+    padding: 16px 12px;
   }
 }
 
@@ -5735,7 +5931,8 @@ details.advanced[open] summary .icon {
 
 /* 6. Publish Header Card & Quota Meter */
 .publish-header-card {
-  padding: 16px 20px !important;
+  padding: 8px 16px !important;
+  margin-bottom: 12px;
 }
 
 .publish-header-content {
@@ -5743,14 +5940,13 @@ details.advanced[open] summary .icon {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
 }
 
 .publish-header-left {
   display: flex;
-  flex-direction: column;
-  min-width: 240px;
-  flex: 1;
+  align-items: center;
+  min-width: max-content;
 }
 
 .publish-header-title-row {
@@ -5762,13 +5958,14 @@ details.advanced[open] summary .icon {
 .publish-header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
 .publish-header-quota {
-  min-width: 200px;
+  min-width: 170px;
   padding: 0;
+  gap: 4px;
 }
 
 .publish-header-btn-row {
@@ -5787,14 +5984,18 @@ details.advanced[open] summary .icon {
 }
 
 @media (max-width: 620px) {
+  .publish-header-card {
+    padding: 10px 14px !important;
+  }
   .publish-header-content {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
   .publish-header-right {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 10px;
   }
   .publish-header-quota {
     width: 100%;
@@ -5806,7 +6007,7 @@ details.advanced[open] summary .icon {
   .publish-header-btn-row .btn {
     flex: 1 1 auto;
     font-size: 12px;
-    padding: 8px 10px;
+    padding: 7px 10px;
   }
 }
 
@@ -5958,3 +6159,456 @@ details.advanced[open] summary .icon {
     grid-template-columns: 1fr;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   1-Click Instagram Publishing Styles (Minimalist, Theme-Native)
+   ───────────────────────────────────────────────────────────── */
+
+.publish-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.publish-card-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.publish-card-btn-row .publish-btn-quick,
+.publish-card-btn-row .publish-btn-instagram {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  width: 50%;
+}
+
+.publish-card-actions.is-uploading .publish-btn-quick,
+.publish-card-actions.is-uploading .publish-btn-instagram {
+  width: 100%;
+  min-width: 100%;
+  margin-top: 0;
+}
+
+.publish-btn-instagram {
+  height: 36px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 2;
+  user-select: none;
+  flex: 1;
+}
+
+.publish-btn-instagram:hover {
+  background: var(--bg-active);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.publish-btn-instagram .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.publish-btn-instagram.is-published {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.publish-btn-instagram.is-published:hover {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.instagram-publish-dialog {
+  max-width: 520px;
+  width: 100%;
+}
+
+.instagram-profile-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.instagram-profile-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.instagram-profile-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.instagram-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.instagram-profile-avatar .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.instagram-profile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.instagram-profile-handle {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.instagram-short-preview {
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.instagram-short-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.instagram-short-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.publish-btn-quick.is-done {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+  cursor: pointer;
+}
+.publish-btn-quick.is-done:hover {
+  background: rgba(34, 197, 94, 0.2);
+}
+.publish-btn-quick:disabled:not(.is-done), .publish-btn-instagram:disabled:not(.is-published) {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  box-shadow: none;
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Post-Process Studio
+   ========================================================================== */
+.postprocess-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.postprocess-header-card {
+  padding: 16px 20px;
+}
+
+.postprocess-header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.postprocess-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--accent-surface);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.postprocess-header-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.postprocess-header-text h2 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.postprocess-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .postprocess-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.postprocess-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.postprocess-dropzone {
+  border: 2px dashed rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 290px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--spring-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.postprocess-dropzone:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.postprocess-dropzone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-surface);
+  box-shadow: 0 0 25px var(--accent-glow);
+  transform: scale(1.01);
+}
+
+.postprocess-dropzone-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 36px 20px;
+}
+
+.postprocess-dropzone-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.postprocess-dropzone-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.postprocess-dropzone-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.postprocess-dropzone-sub {
+  font-size: 13px;
+}
+
+.postprocess-dropzone-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  margin-top: 6px;
+}
+
+.postprocess-preview-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  cursor: default;
+}
+
+.postprocess-preview-player {
+  width: 100%;
+  max-height: 380px;
+  border-radius: var(--radius-md);
+  background: #000;
+  display: block;
+  outline: none;
+}
+
+.postprocess-file-info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+}
+
+.postprocess-file-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.postprocess-file-meta strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.postprocess-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.postprocess-option-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--spring-fast);
+}
+
+.postprocess-option-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.postprocess-option-info {
+  flex: 1;
+}
+
+.postprocess-option-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.postprocess-option-title-row strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.postprocess-option-info p {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.postprocess-progress-box {
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.postprocess-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.postprocess-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.postprocess-result-card {
+  border: 1px solid rgba(43, 166, 64, 0.25);
+  background: linear-gradient(180deg, rgba(43, 166, 64, 0.04) 0%, var(--bg-card) 100%);
+}
+
+.postprocess-result-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: center;
+}
+
+@media (max-width: 800px) {
+  .postprocess-result-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+.postprocess-result-player-wrap {
+  width: 100%;
+}
+
+.postprocess-result-meta-box {
+  display: flex;
+  flex-direction: column;
+}
+

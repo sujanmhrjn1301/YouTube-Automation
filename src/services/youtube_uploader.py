@@ -164,13 +164,17 @@ class YouTubeUploaderService:
 
         youtube = build("youtube", "v3", credentials=creds)
 
-        # Title formatting: Ensure #Shorts is present for algorithmic detection
+        # Title formatting: Ensure #Shorts is present for Shorts, preserve longform feature titles
         title = clip.hook_title.strip()
-        if "#shorts" not in title.lower():
-            title = f"{title} #Shorts"
-
-        description = f"{clip.description}\n\n#Shorts #Viral #Trending"
-        tags = list(set(clip.tags + ["Shorts", "YouTubeShorts", "Viral"]))
+        is_longform = (clip.end_time - clip.start_time) > 180
+        if not is_longform:
+            if "#shorts" not in title.lower():
+                title = f"{title} #Shorts"
+            description = f"{clip.description}\n\n#Shorts #Viral #Trending"
+            tags = list(set(clip.tags + ["Shorts", "YouTubeShorts", "Viral"]))
+        else:
+            description = clip.description
+            tags = list(set(clip.tags + ["Highlights", "Longform", "Trending"]))
 
         body: Dict = {
             "snippet": {

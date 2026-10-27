@@ -17,6 +17,20 @@ def slugify_title(title: str, max_words: int = 6) -> str:
     return slug if slug else "Video"
 
 
+def clean_standalone_short_title(title: str, fallback_label: str = "Viral Short") -> str:
+    """
+    Sanitize short title by stripping legacy multi-part markers (e.g. [Part 1], Part 2/3),
+    collapsing repeated whitespace, and ensuring a single trailing #Shorts hashtag.
+    """
+    clean = title.replace("#Shorts", "").replace("#shorts", "")
+    clean = re.sub(r'\[\s*part\s*\d+.*?\]', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\s+part\s+\d+.*$', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    if not clean:
+        clean = fallback_label
+    return f"{clean} #Shorts"
+
+
 def generate_short_filename(
     title: str,
     video_id: Optional[str] = None,

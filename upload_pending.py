@@ -1,12 +1,13 @@
 """
 Standalone Queued Uploader Script.
 Runs autonomously: Finds the next stored Short that has not been uploaded yet,
-uploads it to YouTube (@eijishorts), confirms the upload, and marks it in Supabase/database.
+uploads it to YouTube (@speedshorts-yt5), confirms the upload, and marks it in Supabase/database.
 
 Usage:
     python upload_pending.py
 """
 
+import re
 import sys
 
 if sys.platform == "win32":
@@ -34,6 +35,7 @@ from src.console import (
 from src.models import ViralClip
 from src.services.database import DatabaseService
 from src.services.youtube_uploader import YouTubeUploaderService
+from src.utils import clean_standalone_short_title
 
 
 def run_pending_upload(upload_all: bool = False) -> None:
@@ -68,8 +70,9 @@ def run_pending_upload(upload_all: bool = False) -> None:
         part_num = item.get("part_number", 1)
         total_parts = item.get("total_parts", 1)
         source_vid = item.get("source_video_id", "video")
-        title = item.get("hook_title", f"Short Part {part_num}")
-        part_str = f"Part {part_num}/{total_parts}" if total_parts > 1 else "Short"
+        raw_title = item.get("hook_title") or f"Short #{item.get('id', 1)}"
+        title = clean_standalone_short_title(raw_title, fallback_label=f"Viral Short #{item.get('id', 1)}")
+        part_str = "Short"
 
         log_info("UPLOADER", f"Inspecting: [bold yellow]{part_str}[/bold yellow] - [bold white]{title}[/bold white]")
 
@@ -85,21 +88,25 @@ def run_pending_upload(upload_all: bool = False) -> None:
 
         # FALLBACK: Local Disk
         if not video_file_path or not Path(video_file_path).exists() or Path(video_file_path).stat().st_size <= 1024:
-            loc_path = item.get("local_path")
-            if loc_path and Path(loc_path).exists() and Path(loc_path).stat().st_size > 1024:
-                video_file_path = str(loc_path)
+            found_local = db_service.find_local_video(item)
+            if found_local and found_local.is_file() and found_local.stat().st_size > 1024:
+                video_file_path = str(found_local)
                 log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Using local disk file: {video_file_path}")
             else:
-                import re
-                clean_title = re.sub(r'[^a-zA-Z0-9]', '', title.lower().replace("shorts", ""))
-                for f in settings.OUTPUT_DIR.glob("*.mp4"):
-                    f_name_lower = f.name.lower()
-                    f_stem_clean = re.sub(r'[^a-zA-Z0-9]', '', f.stem.lower())
-                    if (source_vid and source_vid.lower() in f_name_lower and f"part{part_num}" in f_name_lower) or \
-                       (clean_title and len(clean_title) >= 10 and clean_title[:15] in f_stem_clean):
-                        video_file_path = str(f)
-                        log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Found matching video file in output: {video_file_path}")
-                        break
+                loc_path = item.get("local_path")
+                if loc_path and Path(loc_path).exists() and Path(loc_path).stat().st_size > 1024:
+                    video_file_path = str(loc_path)
+                    log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Using local disk file: {video_file_path}")
+                else:
+                    clean_title = re.sub(r'[^a-zA-Z0-9]', '', title.lower().replace("shorts", ""))
+                    for f in settings.OUTPUT_DIR.glob("*.mp4"):
+                        f_name_lower = f.name.lower()
+                        f_stem_clean = re.sub(r'[^a-zA-Z0-9]', '', f.stem.lower())
+                        if (source_vid and source_vid.lower() in f_name_lower and f"part{part_num}" in f_name_lower) or \
+                           (clean_title and len(clean_title) >= 10 and clean_title[:15] in f_stem_clean):
+                            video_file_path = str(f)
+                            log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Found matching video file in output: {video_file_path}")
+                            break
 
         if not video_file_path or not Path(video_file_path).exists():
             log_warning("UPLOADER", f"No video file found on cloud storage or local disk for: {title}. Checking next...")

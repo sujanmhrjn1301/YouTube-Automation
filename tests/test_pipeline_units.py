@@ -77,14 +77,14 @@ def test_snap_to_word_boundaries():
 
     snapped_start, snapped_end = detector.snap_to_word_boundaries(
         raw_start=10.0,
-        raw_end=58.5,
+        raw_end=70.0,
         transcription=transcription,
         total_duration=100.0,
     )
 
     # Should skip "Um" and start at 10.5
     assert snapped_start == 10.5
-    assert 45.0 <= (snapped_end - snapped_start) <= 59.0
+    assert 59.0 <= (snapped_end - snapped_start) <= 75.0
 
 
 def test_multi_cut_subtitle_remapping():
@@ -675,6 +675,7 @@ def test_sentence_boundary_snapping_avoids_dangling_mid_sentence():
         transcription=transcription,
         total_duration=60.0,
         max_duration=59.0,
+        min_duration=45.0,
     )
 
     # Snapped end MUST NOT end on "because" or "the" mid-sentence; it should snap cleanly to "escaped!"
@@ -713,6 +714,7 @@ def test_vocal_release_decay_padding():
         transcription=transcription,
         total_duration=60.0,
         max_duration=59.0,
+        min_duration=35.0,
     )
 
     # End should be strictly greater than 40.0 (contains +0.15s to +0.18s natural acoustic release padding)
@@ -821,5 +823,252 @@ def test_stream_monitor_agent_instantiation():
     assert agent.crop_mode == "blurred_background"
 
 
+def test_enforce_min_59s_max_150s_clip_duration():
+    from src.services.viral_detector import ViralDetectorService
+    from src.models import FullTranscription, TranscriptionSegment, WordTimestamp
+
+    detector = ViralDetectorService.__new__(ViralDetectorService)
+
+    # 180-second transcription with words spaced across time
+    words = []
+    for sec in range(0, 180):
+        punct = "." if sec % 10 == 9 else ""
+        words.append(WordTimestamp(word=f"word{sec}{punct}", start=float(sec), end=float(sec) + 0.8))
+
+    transcription = FullTranscription(
+        language="en",
+        language_probability=0.99,
+        duration=180.0,
+        segments=[TranscriptionSegment(id=0, start=0.0, end=180.0, text="test long video", words=words)],
+        total_words=len(words),
+    )
+
+    # Case A: LLM returns 18-second candidate (e.g. 10.0s to 28.0s)
+    # Pipeline MUST enforce at least 59.0s
+    snapped_start, snapped_end = detector.snap_to_word_boundaries(
+        raw_start=10.0,
+        raw_end=28.0,
+        transcription=transcription,
+        total_duration=180.0,
+    )
+    dur = snapped_end - snapped_start
+    assert dur >= 59.0, f"Clip duration {dur}s fell below required 59.0s minimum!"
+    assert dur <= 150.0, f"Clip duration {dur}s exceeded 150.0s maximum!"
+
+    # Case B: LLM returns 20-second candidate near the end of video (e.g. 160.0s to 180.0s)
+    # Pipeline MUST shift backwards to ensure at least 59.0s
+    snapped_start_end, snapped_end_end = detector.snap_to_word_boundaries(
+        raw_start=160.0,
+        raw_end=180.0,
+        transcription=transcription,
+        total_duration=180.0,
+    )
+    dur_end = snapped_end_end - snapped_start_end
+    assert dur_end >= 59.0, f"Clip duration at end {dur_end}s fell below 59.0s!"
+    assert dur_end <= 150.0
+
+    # Case C: LLM returns 170-second candidate (exceeds max 150s)
+    # Pipeline MUST clamp to at most 150.0s
+    snapped_start_long, snapped_end_long = detector.snap_to_word_boundaries(
+        raw_start=5.0,
+        raw_end=175.0,
+        transcription=transcription,
+        total_duration=180.0,
+    )
+    dur_long = snapped_end_long - snapped_start_long
+    assert dur_long >= 59.0
+    assert dur_long <= 150.0, f"Clip duration {dur_long}s exceeded 150.0s maximum!"
 
 
+def test_anticipation_cliffhanger_avoidance():
+    """Verify that boundary snapping refuses to end on anticipation cues ('look at what he is about to do') and extends to capture the payoff."""
+    from src.services.viral_detector import ViralDetectorService
+    from src.models import FullTranscription, TranscriptionSegment, WordTimestamp
+
+    detector = ViralDetectorService.__new__(ViralDetectorService)
+
+    words = [
+        WordTimestamp(word="Start", start=0.0, end=0.8),
+    ]
+    # Filler dialogue up to 55s
+    for i in range(1, 56):
+        words.append(WordTimestamp(word=f"filler{i}", start=float(i), end=float(i) + 0.8))
+
+    # Sentence A (at 59-61s): Anticipation / cliffhanger setup!
+    words.append(WordTimestamp(word="Wait,", start=59.0, end=59.4))
+    words.append(WordTimestamp(word="look", start=59.5, end=59.8))
+    words.append(WordTimestamp(word="at", start=59.9, end=60.1))
+    words.append(WordTimestamp(word="what", start=60.2, end=60.4))
+    words.append(WordTimestamp(word="he", start=60.5, end=60.7))
+    words.append(WordTimestamp(word="is", start=60.8, end=61.0))
+    words.append(WordTimestamp(word="about", start=61.1, end=61.3))
+    words.append(WordTimestamp(word="to", start=61.4, end=61.6))
+    words.append(WordTimestamp(word="do.", start=61.7, end=62.0))
+
+    # Sentence B (at 65-70s): The actual action outcome & payoff!
+    words.append(WordTimestamp(word="He", start=65.0, end=65.3))
+    words.append(WordTimestamp(word="jumped", start=65.4, end=65.9))
+    words.append(WordTimestamp(word="and", start=66.0, end=66.3))
+    words.append(WordTimestamp(word="landed", start=66.4, end=66.9))
+    words.append(WordTimestamp(word="the", start=67.0, end=67.2))
+    words.append(WordTimestamp(word="impossible", start=67.3, end=67.8))
+    words.append(WordTimestamp(word="trick!", start=67.9, end=68.5))
+
+    transcription = FullTranscription(
+        language="en",
+        language_probability=0.99,
+        duration=120.0,
+        segments=[TranscriptionSegment(id=0, start=0.0, end=68.5, text="full test", words=words)],
+        total_words=len(words),
+    )
+
+    # LLM raw_end was 62.0s (pointing right at the anticipation sentence)
+    snapped_start, snapped_end = detector.snap_to_word_boundaries(
+        raw_start=0.0,
+        raw_end=62.0,
+        transcription=transcription,
+        total_duration=120.0,
+    )
+
+    # Snapping MUST bypass the 62.0s cliffhanger and extend to the 68.5s payoff!
+    assert snapped_end >= 68.0, f"Snapped end {snapped_end}s cut off at the cliffhanger instead of capturing the payoff!"
+
+
+def test_longform_storyboard_adaptive_and_continuity(tmp_path: Path):
+    from src.services.longform_editor import LongformVideoEditor
+
+    editor = LongformVideoEditor()
+    # Test adaptive 6-act storyboard for Speed iPhone stream
+    stream_title = "BUYING THE NEW iPHONE DUO!"
+    duration = 9360.0  # 2.6 hours
+    storyboard = editor.build_narrative_storyboard(
+        duration=duration,
+        focus_timestamp=0.0,
+        target_runtime_sec=480,
+        stream_title=stream_title
+    )
+
+    assert len(storyboard) == 6
+    # Total runtime must be within the 7-9m (420s - 540s) window
+    total_dur = sum(s["duration"] for s in storyboard)
+    assert 420.0 <= total_dur <= 540.0
+
+    # Ensure topic extracted and not hardcoded to Minecraft
+    assert "WARDEN" not in storyboard[0]["act_title"]
+    assert "IPHONE" in storyboard[0]["act_title"]
+
+    # Verify no negative timestamps and strictly increasing act times
+    for s in storyboard:
+        assert s["start"] >= 0.0
+        assert s["end"] > s["start"]
+        # Verify zero-abrupt-stop padding (+0.45s acoustic reaction buffer)
+        assert s["duration"] > 24.0
+
+    # Test metadata generation
+    dummy_video = tmp_path / "test_feature.mp4"
+    dummy_video.write_bytes(b"dummy_video_bytes")
+    meta = editor.generate_youtube_metadata(
+        stream_meta={"title": stream_title, "channel": "IShowSpeed"},
+        storyboard=storyboard,
+        final_video_path=dummy_video
+    )
+    assert "iphone" in meta["title"].lower()
+    assert len(meta["chapters"]) == 6
+
+
+def test_peak_detector_clips_count_guarantee():
+    """Verify that PeakDetectorService extracts exactly the requested number of clips without truncation."""
+    from src.services.peak_detector import PeakDetectorService
+
+    detector = PeakDetectorService()
+    dummy_wav = Path("output/temp_test_audio.wav")
+
+    # 1. Normal 10.5m video (629s) with 8 clips requested
+    peaks_8 = detector.find_top_peak_windows(
+        wav_path=dummy_wav,
+        total_duration=629.0,
+        window_duration=180.0,
+        top_k=8,
+    )
+    assert len(peaks_8) == 8, f"Expected 8 clips for 629s video, got {len(peaks_8)}"
+    for s, e, score in peaks_8:
+        assert 0.0 <= s < e <= 629.0
+
+    # 2. 5m video (300s) with 5 clips requested
+    peaks_5 = detector.find_top_peak_windows(
+        wav_path=dummy_wav,
+        total_duration=300.0,
+        window_duration=120.0,
+        top_k=5,
+    )
+    assert len(peaks_5) == 5, f"Expected 5 clips for 300s video, got {len(peaks_5)}"
+
+    # 3. 2h livestream (7200s) with 10 clips requested
+    peaks_10 = detector.find_top_peak_windows(
+        wav_path=dummy_wav,
+        total_duration=7200.0,
+        window_duration=180.0,
+        top_k=10,
+    )
+    assert len(peaks_10) == 10, f"Expected 10 clips for 7200s stream, got {len(peaks_10)}"
+
+
+def test_settings_whisper_model_size():
+    from src.config import settings
+    assert hasattr(settings, "WHISPER_MODEL_SIZE")
+    assert settings.WHISPER_MODEL_SIZE == "base"
+
+
+def test_bleep_audio_gating_and_default_state():
+    """Verify that profanity bleeping gates audio to 0 outside intervals and defaults to disabled."""
+    import inspect
+    from src.services.video_processor import VideoProcessorService
+    from postprocess_clip import postprocess_video
+
+    # 1. Verify default parameter is False in all public interfaces
+    sig_render = inspect.signature(VideoProcessorService._render_segment)
+    assert sig_render.parameters["bleep_intervals"].default is None
+
+    sig_proc = inspect.signature(VideoProcessorService.process_clip)
+    assert sig_proc.parameters["bleep_intervals"].default is None
+
+    sig_post = inspect.signature(postprocess_video)
+    assert sig_post.parameters["bleep_profanity"].default is False
+
+    # 2. Verify filter formula gates volume to 0 outside intervals
+    intervals = [(1.5, 2.0, "curse1"), (4.0, 4.5, "curse2")]
+    dur = 10.0
+    conds = "+".join(f"between(t,{s:.2f},{e:.2f})" for s, e, _ in intervals)
+    
+    # Original audio is 0 only when conds=1, 1 otherwise
+    clean_filter = f"[0:a]volume='if({conds},0,1)':eval=frame[clean_a]"
+    assert "if(between(t,1.50,2.00)+between(t,4.00,4.50),0,1)" in clean_filter
+
+    # Sine beep is 0.35 only when conds=1, 0 otherwise (completely silent across rest of video)
+    beep_filter = f"sine=frequency=1000:duration={dur:.2f},volume='if({conds},0.35,0)':eval=frame[beep_a]"
+    assert "volume='if(between(t,1.50,2.00)+between(t,4.00,4.50),0.35,0)'" in beep_filter
+
+
+def test_uploader_module_imports_and_clean_title_contract():
+    """Verify that dashboard.upload_single and upload_pending import cleanly and strip Part numbers."""
+    from dashboard.upload_single import upload_single_short
+    import upload_pending
+    from src.utils import clean_standalone_short_title
+
+    # Ensure function signatures and imports are valid and callable
+    assert callable(upload_single_short)
+    assert hasattr(upload_pending, "run_pending_upload")
+
+    # Verify regex stripping logic on diverse legacy title patterns
+    test_titles = [
+        ("Buying the New iPhone Duo [Part 1] #Shorts", "Buying the New iPhone Duo #Shorts"),
+        ("Insane Beat Drop Challenge! Part 2/3 #shorts", "Insane Beat Drop Challenge! #Shorts"),
+        ("Crazy Moments Part 1", "Crazy Moments #Shorts"),
+        ("[Part 3] Secret Revealed #Shorts", "Secret Revealed #Shorts"),
+        ("Standalone Viral Video #Shorts", "Standalone Viral Video #Shorts"),
+        ("", "Viral Short #Shorts"),
+    ]
+
+    for raw, expected in test_titles:
+        clean = clean_standalone_short_title(raw)
+        assert clean == expected

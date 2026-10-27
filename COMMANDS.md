@@ -9,7 +9,7 @@ Extracts peak moments, reframes to 9:16 vertical, adds animated karaoke captions
 ```powershell
 python cli.py --url "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
-> **Tip:** Add `--auto-upload` to publish directly to YouTube (`@eijishorts`) immediately:
+> **Tip:** Add `--auto-upload` to publish directly to YouTube (`@speedshorts-yt5`) immediately:
 > ```powershell
 > python cli.py --url "https://www.youtube.com/watch?v=VIDEO_ID" --auto-upload
 > ```

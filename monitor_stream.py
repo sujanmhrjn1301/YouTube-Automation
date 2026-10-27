@@ -22,7 +22,7 @@ from src.services.stream_monitor import StreamMonitorAgent
 @click.option(
     "--chunk-duration",
     "-c",
-    default=150,
+    default=180,
     show_default=True,
     type=int,
     help="Rolling buffer window in seconds to capture from live stream (e.g. 120-180s).",
@@ -44,7 +44,7 @@ from src.services.stream_monitor import StreamMonitorAgent
 )
 @click.option(
     "--bleep-profanity / --no-bleep-profanity",
-    default=True,
+    default=False,
     show_default=True,
     help="Automatically detect English swear words and censor with 1000Hz bleeps.",
 )

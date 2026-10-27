@@ -6,6 +6,7 @@ Chapter lower-third motion graphics, and EBU R128 -14 LUFS YouTube Audio Masteri
 """
 
 import os
+import re
 import json
 import time
 import subprocess
@@ -46,7 +47,6 @@ class LongformVideoEditor:
         cmd = [
             "yt-dlp",
             "--ffmpeg-location", self.ffmpeg_dir,
-            "--extractor-args", "youtube:player_client=android",
             "--dump-json",
             url
         ]
@@ -65,12 +65,13 @@ class LongformVideoEditor:
         except Exception as e:
             log_warning("LONGFORM_EDITOR", f"Direct metadata probe warning: {e}")
 
-        # Fallback quick query
+        # Fallback quick query derived from video URL
+        vid_id = url.split("v=")[-1].split("&")[0] if "v=" in url else "stream_vod"
         return {
-            "id": url.split("v=")[-1].split("&")[0] if "v=" in url else "stream_vod",
-            "title": "Minecraft: We tried to Kill WARDEN. BIG MISTAKE?",
-            "duration": 21892.0,
-            "channel": "Suzzane",
+            "id": vid_id,
+            "title": f"Live Stream Feature ({vid_id})",
+            "duration": 7200.0,
+            "channel": "Creator",
             "thumbnail": "",
             "description": "Stream VOD"
         }
@@ -78,91 +79,126 @@ class LongformVideoEditor:
     def build_narrative_storyboard(
         self,
         duration: float,
-        focus_timestamp: float = 4210.0,
-        target_runtime_sec: int = 480
+        focus_timestamp: float = 0.0,
+        target_runtime_sec: int = 480,
+        stream_title: str = ""
     ) -> List[Dict[str, Any]]:
         """
         Construct a 6-Act high-retention narrative structure targeting strictly between 420s (7m) and 540s (9m).
-        Ensures perfect storytelling pacing:
-        - Act 0 (Hook / Teaser): ~20-25s
-        - Act 1 (Context & Goal): ~70-90s
-        - Act 2 (Escalation / Obstacles): ~90-110s
-        - Act 3 (Turning Point / Reveal): ~110-130s
-        - Act 4 (Climax Battle): ~110-130s
-        - Act 5 (Aftermath & Outro): ~30-40s
+        Ensures perfect storytelling pacing and zero-abrupt-stop audio continuity:
+        - Act 0 (Hook / Teaser): ~20-25s (Peak chaos / climax out of context)
+        - Act 1 (Context & Goal): ~70-90s (The mission setup, no stream setup fluff)
+        - Act 2 (Escalation / Obstacles): ~90-110s (Rising friction and fails)
+        - Act 3 (Turning Point / Reveal): ~110-130s (Shift in stakes / crisis)
+        - Act 4 (Climax Battle / Main Event): ~110-130s (The showdown)
+        - Act 5 (Aftermath & Outro): ~30-40s (Payoff, laughter, subscribe callout)
         Total sum target: target_runtime_sec (default 480s / 8 min).
         """
         # Clamp target duration strictly to 7 - 9 minutes
         target = max(420, min(540, int(target_runtime_sec)))
 
-        # If user specified a focus timestamp (like 4210s where Warden fight is)
-        anchor = float(focus_timestamp) if focus_timestamp > 0 else (duration * 0.25)
-        # Ensure anchor doesn't exceed duration
+        # Clean topic from stream title
+        theme = "THE EVENT"
+        if stream_title:
+            cleaned = re.sub(r"[\[\(].*?[\]\)]", "", stream_title).strip()
+            words = [w for w in cleaned.split() if w.lower() not in ("buying", "we", "tried", "to", "the", "i", "a", "an", "live", "stream", "playing", "new")]
+            if words:
+                theme = " ".join(words[:4]).upper()
+
+        # If user specified a focus timestamp (e.g. key moment), anchor there; otherwise choose peak stream event
+        if focus_timestamp > 0:
+            anchor = float(focus_timestamp)
+        elif duration > 1800:
+            anchor = duration * 0.45
+        else:
+            anchor = max(60.0, duration * 0.30)
+
+        # Ensure anchor leaves enough room for subsequent acts
         if anchor >= duration - 600:
             anchor = max(60.0, duration - 1200)
 
-        # Proportions: 5% hook, 18% setup, 23% escalation, 25% turning point, 22% climax, 7% outro
+        # Proportions: 5% hook, 17% setup, 22% escalation, 25% turning point, 24% climax, 7% outro
         hook_dur = 24.0
         setup_dur = round(target * 0.17)
         escalation_dur = round(target * 0.22)
         turning_dur = round(target * 0.25)
-        climax_dur = round(target * 0.25)
-        outro_dur = target - (hook_dur + setup_dur + escalation_dur + turning_dur + climax_dur)
+        climax_dur = round(target * 0.24)
+        outro_dur = max(25, target - (hook_dur + setup_dur + escalation_dur + turning_dur + climax_dur))
+
+        # Acoustic breath padding (+0.45s tail buffer) to guarantee zero mid-word or mid-laugh cutoffs
+        pad = 0.45
+
+        # Pacing anchors
+        act1_start = max(15.0, anchor - (setup_dur + 180.0))
+        act2_start = max(act1_start + setup_dur + 15.0, anchor - (escalation_dur + 20.0))
+        act3_start = anchor + hook_dur + 5.0
+        act4_start = act3_start + turning_dur + 10.0
+        act5_start = act4_start + climax_dur + 10.0
+
+        # Safety bound checks against total duration
+        if act5_start + outro_dur > duration:
+            scale = duration / (act5_start + outro_dur + 10.0)
+            anchor *= scale
+            act1_start = max(5.0, act1_start * scale)
+            act2_start = max(act1_start + 10.0, act2_start * scale)
+            act3_start = anchor + hook_dur + 2.0
+            act4_start = act3_start + turning_dur + 5.0
+            act5_start = min(duration - outro_dur - 5.0, act4_start + climax_dur + 5.0)
 
         storyboard = [
             {
                 "act": 0,
-                "label": "TEASER: THE WARDEN AWAKENS",
-                "start": anchor,
-                "end": anchor + hook_dur,
-                "duration": hook_dur,
+                "label": f"TEASER: {theme}",
+                "start": round(anchor, 2),
+                "end": round(anchor + hook_dur + pad, 2),
+                "duration": round(hook_dur + pad, 2),
                 "style": "punch_in",
-                "act_title": "TEASER: DANGER BELOW"
+                "act_title": f"TEASER: {theme[:28]}"
             },
             {
                 "act": 1,
-                "label": "ACT I: THE IMPOSSIBLE MISSION",
-                "start": max(0.0, anchor - 380),
-                "end": max(0.0, anchor - 380) + setup_dur,
-                "duration": setup_dur,
+                "label": "ACT I: THE MISSION & SETUP",
+                "start": round(act1_start, 2),
+                "end": round(act1_start + setup_dur + pad, 2),
+                "duration": round(setup_dur + pad, 2),
                 "style": "standard",
-                "act_title": "ACT I: THE MISSION"
+                "act_title": "ACT I: THE SETUP"
             },
             {
                 "act": 2,
-                "label": "ACT II: DESCENT INTO ANCIENT CITY",
-                "start": max(0.0, anchor - 190),
-                "end": max(0.0, anchor - 190) + escalation_dur,
-                "duration": escalation_dur,
+                "label": "ACT II: ESCALATION & CHAOS",
+                "start": round(act2_start, 2),
+                "end": round(act2_start + escalation_dur + pad, 2),
+                "duration": round(escalation_dur + pad, 2),
                 "style": "standard",
-                "act_title": "ACT II: SNEAKING DEEP"
+                "act_title": "ACT II: THE CHAOS"
             },
             {
                 "act": 3,
-                "label": "ACT III: FIRST ENCOUNTER & PANIC",
-                "start": anchor + hook_dur,
-                "end": anchor + hook_dur + turning_dur,
-                "duration": turning_dur,
+                "label": "ACT III: THE TURNING POINT",
+                "start": round(act3_start, 2),
+                "end": round(act3_start + turning_dur + pad, 2),
+                "duration": round(turning_dur + pad, 2),
                 "style": "punch_in",
-                "act_title": "ACT III: IT HEARS US"
+                "act_title": "ACT III: TURNING POINT"
             },
             {
                 "act": 4,
-                "label": "ACT IV: THE FINAL SHOWDOWN",
-                "start": anchor + hook_dur + turning_dur + 30,
-                "end": anchor + hook_dur + turning_dur + 30 + climax_dur,
-                "duration": climax_dur,
+                "label": "ACT IV: THE CLIMAX",
+                "start": round(act4_start, 2),
+                "end": round(act4_start + climax_dur + pad, 2),
+                "duration": round(climax_dur + pad, 2),
                 "style": "punch_in",
-                "act_title": "ACT IV: THE BATTLE"
+                "act_title": "ACT IV: THE CLIMAX"
             },
             {
                 "act": 5,
-                "label": "ACT V: THE ESCAPE & OUTRO",
-                "start": anchor + hook_dur + turning_dur + 30 + climax_dur + 20,
-                "end": anchor + hook_dur + turning_dur + 30 + climax_dur + 20 + outro_dur,
-                "duration": outro_dur,
+                "label": "ACT V: THE AFTERMATH & OUTRO",
+                "start": round(act5_start, 2),
+                "end": round(act5_start + outro_dur + pad, 2),
+                "duration": round(outro_dur + pad, 2),
                 "style": "standard",
-                "act_title": "ACT V: SURVIVED?"
+                "act_title": "ACT V: AFTERMATH"
             }
         ]
 
@@ -181,11 +217,12 @@ class LongformVideoEditor:
         downloaded_paths = []
         job_temp = self.temp_dir / job_id
         job_temp.mkdir(parents=True, exist_ok=True)
+        video_id = url.split("v=")[-1].split("&")[0] if "v=" in url else "stream"
 
         for i, segment in enumerate(storyboard):
             start = segment["start"]
             end = segment["end"]
-            out_file = job_temp / f"act_{i}_{int(start)}_{int(end)}.mp4"
+            out_file = job_temp / f"act_{i}_{video_id}_{int(start)}_{int(end)}.mp4"
 
             if progress_cb:
                 progress_cb(f"Extracting Act {i+1}/6: {segment['act_title']} ({segment['duration']:.0f}s)", (i + 1) / len(storyboard) * 0.5)
@@ -197,15 +234,15 @@ class LongformVideoEditor:
                 downloaded_paths.append(out_file)
                 continue
 
-            # Check if previously downloaded in any temp directory
+            # Check if previously downloaded for THIS EXACT video and timestamps
             found_cached = None
-            for prev_file in self.temp_dir.glob(f"*/act_{i}_*.mp4"):
+            for prev_file in self.temp_dir.glob(f"*/act_{i}_{video_id}_{int(start)}_{int(end)}.mp4"):
                 if prev_file.is_file() and prev_file.stat().st_size > 50000:
                     found_cached = prev_file
                     break
 
             if found_cached:
-                log_info("LONGFORM_EDITOR", f"Reusing cached {found_cached.name} for Act {i+1}")
+                log_info("LONGFORM_EDITOR", f"Reusing cached segment for Act {i+1} ({video_id})")
                 import shutil
                 shutil.copyfile(found_cached, out_file)
                 downloaded_paths.append(out_file)
@@ -214,26 +251,26 @@ class LongformVideoEditor:
             cmd = [
                 "yt-dlp",
                 "--ffmpeg-location", self.ffmpeg_dir,
-                "--extractor-args", "youtube:player_client=android",
                 "--download-sections", f"*{start:.1f}-{end:.1f}",
                 "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best",
+                "--merge-output-format", "mp4",
                 "-o", str(out_file),
                 url
             ]
 
-            res = subprocess.run(cmd, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=120)
+            res = subprocess.run(cmd, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=180)
             if not out_file.exists() or out_file.stat().st_size < 10000:
-                # Try fallback format if mobile android SABR stream issues
+                # Try fallback format if visionos / default format selector fails
                 cmd_fallback = [
                     "yt-dlp",
                     "--ffmpeg-location", self.ffmpeg_dir,
-                    "--extractor-args", "youtube:player_client=android",
                     "--download-sections", f"*{start:.1f}-{end:.1f}",
-                    "-f", "18/best",
+                    "-f", "bestvideo+bestaudio/18/best",
+                    "--merge-output-format", "mp4",
                     "-o", str(out_file),
                     url
                 ]
-                subprocess.run(cmd_fallback, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=90)
+                res = subprocess.run(cmd_fallback, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=120)
 
             if out_file.exists() and out_file.stat().st_size > 1000:
                 downloaded_paths.append(out_file)
@@ -256,21 +293,42 @@ class LongformVideoEditor:
 
         font_file = "C\\:/Windows/Fonts/segoeuib.ttf" if os.path.exists("C:/Windows/Fonts/segoeuib.ttf") else "C\\:/Windows/Fonts/arialbd.ttf"
 
-        # HUD callout configs per act
+        # Adaptive HUD callout configs per act based on storyboard metadata
         hud_configs = {
-            0: {"text": "[!] THREAT DETECTED\\: DEEP DARK MOB", "color": "0xFFFF00", "bar": "0xFF2222", "st": 12.5, "et": 19.0, "darkness": (13.0, 21.0), "broll": "broll_teaser_zoom.mp4", "b_st": 1.0, "b_et": 3.5},
-            1: {"text": "OBJECTIVE\\: INFILTRATE THE ANCIENT CITY", "color": "0x00E5FF", "bar": "0x00E5FF", "st": 25.0, "et": 34.0, "punch": (40.0, 48.0)},
-            2: {"text": "STEALTH PROTOCOL\\: SENSORS ACTIVATING", "color": "0xFFE500", "bar": "0xFF9900", "st": 38.0, "et": 47.0, "punch": (65.0, 74.0), "darkness": (50.0, 68.0), "broll": "broll_ancient_city.mp4", "b_st": 15.0, "b_et": 19.0},
-            3: {"text": "CRITICAL ALERT\\: THE WARDEN HAS EMERGED!", "color": "0xFF3333", "bar": "0xFF0000", "st": 28.0, "et": 38.0, "punch": (45.0, 54.0), "punch2": (75.0, 84.0), "darkness": (12.0, 45.0), "broll": "broll_warden_encounter.mp4", "b_st": 12.0, "b_et": 16.0},
-            4: {"text": "BOSS RAGE\\: SONIC BOOM CHARGING", "color": "0xFF4444", "bar": "0xFF0000", "st": 45.0, "et": 55.0, "combat_pacing": True},
-            5: {"text": "MISSION COMPLETED \\xB7 SURVIVED THE RAID!", "color": "0x00FF88", "bar": "0x00E5FF", "st": 8.0, "et": 24.0, "fade_out": 24.0}
+            0: {"text": f"[!] TEASER \\xB7 {storyboard[0].get('act_title', 'PEAK CHAOS')}", "color": "0xFFFF00", "bar": "0xFF2222", "st": 2.5, "et": 9.5, "punch": (3.0, 8.5)},
+            1: {"text": f"MISSION BRIEFING \\xB7 {storyboard[1].get('act_title', 'THE SETUP')}", "color": "0x00E5FF", "bar": "0x00E5FF", "st": 10.0, "et": 19.0, "punch": (25.0, 32.0)},
+            2: {"text": "WARNING \\xB7 SITUATION ESCALATING", "color": "0xFFE500", "bar": "0xFF9900", "st": 15.0, "et": 24.0, "punch": (35.0, 42.0)},
+            3: {"text": "CRITICAL ALERT \\xB7 TURNING POINT", "color": "0xFF3333", "bar": "0xFF0000", "st": 18.0, "et": 28.0, "punch": (30.0, 38.0), "punch2": (55.0, 63.0)},
+            4: {"text": f"[!] THE MAIN EVENT \\xB7 {storyboard[4].get('act_title', 'CLIMAX')}", "color": "0xFF4444", "bar": "0xFF0000", "st": 20.0, "et": 32.0, "combat_pacing": True},
+            5: {"text": "MISSION COMPLETED \\xB7 AFTERMATH", "color": "0x00FF88", "bar": "0x00E5FF", "st": 4.0, "et": 16.0, "fade_out": max(12.0, storyboard[5].get("duration", 30.0) - 3.5)}
         }
 
         for i, (seg_file, meta) in enumerate(zip(segment_files, storyboard)):
+            out_proc = job_temp / f"processed_{seg_file.name}"
+
+            # Check if this exact processed act was already rendered in current or previous job
+            if out_proc.exists() and out_proc.stat().st_size > 500000:
+                log_info("LONGFORM_EDITOR", f"Reusing rendered Act {i+1} ({out_proc.name})")
+                processed.append(out_proc)
+                continue
+
+            cached_proc = None
+            for prev_proc in self.temp_dir.glob(f"*/processed_{seg_file.name}"):
+                if prev_proc.is_file() and prev_proc.stat().st_size > 500000:
+                    cached_proc = prev_proc
+                    break
+
+            if cached_proc:
+                log_info("LONGFORM_EDITOR", f"Reusing cached rendered Act {i+1} ({seg_file.name})")
+                import shutil
+                shutil.copyfile(cached_proc, out_proc)
+                processed.append(out_proc)
+                continue
+
+            log_stage(3, f"Rendering Act {i+1}/{len(segment_files)}", f"{meta['act_title']} (motion graphics, punch-in & audio smoothing)")
             if progress_cb:
                 progress_cb(f"Applying Visual FX & B-Roll to Act {i+1}: {meta['act_title']}", 0.5 + (i + 1) / len(segment_files) * 0.25)
 
-            out_proc = job_temp / f"processed_{seg_file.name}"
             cfg = hud_configs.get(i, {})
             broll_path = broll_dir / cfg.get("broll", "") if cfg.get("broll") else None
 
@@ -319,29 +377,12 @@ class LongformVideoEditor:
                     )
                     cur_v = "v_punch2"
 
-            # Step 3: Lower-third Chapter Card (Glassmorphic)
-            filter_parts.append(
-                f"[{cur_v}]drawbox=y=ih-140:color=black@0.75:width=iw:height=90:t=fill:enable='between(t\\,0.5\\,5.0)',"
-                f"drawbox=y=ih-142:color=0x00E5FF@0.9:width=iw:height=4:t=fill:enable='between(t\\,0.5\\,5.0)',"
-                f"drawtext=fontfile='{font_file}':text='{act_title}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=h-118:enable='between(t\\,0.5\\,5.0)'[v_card]"
-            )
-            cur_v = "v_card"
+            # Ensure video pad is named
+            if cur_v == "0:v":
+                filter_parts.append("[0:v]null[v_base]")
+                cur_v = "v_base"
 
-            # Step 4: Top HUD Warning Badge
-            if cfg.get("text"):
-                h_text = cfg["text"]
-                h_col = cfg.get("color", "0xFFFF00")
-                h_bar = cfg.get("bar", "0xFF0000")
-                h_st = cfg.get("st", 10.0)
-                h_et = cfg.get("et", 18.0)
-                filter_parts.append(
-                    f"[{cur_v}]drawbox=y=40:color=black@0.75:width=iw:height=60:t=fill:enable='between(t\\,{h_st}\\,{h_et})',"
-                    f"drawbox=y=98:color={h_bar}@0.9:width=iw:height=3:t=fill:enable='between(t\\,{h_st}\\,{h_et})',"
-                    f"drawtext=fontfile='{font_file}':text='{h_text}':fontcolor={h_col}:fontsize=28:x=(w-text_w)/2:y=56:enable='between(t\\,{h_st}\\,{h_et})'[v_hud]"
-                )
-                cur_v = "v_hud"
-
-            # Step 5: Pulsing Minecraft Darkness Effect
+            # Step 5: Darkness Vignette if configured
             if cfg.get("darkness"):
                 d_st, d_et = cfg["darkness"]
                 filter_parts.append(
@@ -357,28 +398,46 @@ class LongformVideoEditor:
                 )
                 cur_v = "v_out"
 
+            # Step 7: Studio-grade audio micro-smoothing (80ms in, 120ms out) to eliminate abrupt stops, pops, or harsh cutoffs
+            seg_dur = float(meta.get("duration", 60.0))
+            fade_out_st = max(0.5, seg_dur - 0.15)
+            filter_parts.append(
+                f"[0:a]afade=t=in:ss=0:d=0.08,afade=t=out:st={fade_out_st:.2f}:d=0.15[a_smooth]"
+            )
+
             full_filter = ";".join(filter_parts)
+
+            render_timeout = max(450, int(seg_dur * 6))
 
             cmd = [
                 self.ffmpeg_path,
                 "-y",
+                "-nostdin",
                 *cmd_inputs,
                 "-filter_complex", full_filter,
                 "-map", f"[{cur_v}]",
-                "-map", "0:a",
+                "-map", "[a_smooth]",
                 "-c:v", "libx264",
-                "-preset", "fast",
+                "-preset", "veryfast",
                 "-crf", "20",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 str(out_proc)
             ]
 
-            res = subprocess.run(cmd, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=240)
-            if out_proc.exists() and out_proc.stat().st_size > 10000:
+            res = None
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=render_timeout)
+            except subprocess.TimeoutExpired as e:
+                log_warning("LONGFORM_EDITOR", f"Act {i+1} render process timed out or paused: {e}")
+            except Exception as e:
+                log_warning("LONGFORM_EDITOR", f"Act {i+1} render error: {e}")
+
+            if out_proc.exists() and out_proc.stat().st_size > 500000:
                 processed.append(out_proc)
             else:
-                log_warning("LONGFORM_EDITOR", f"Complex FX fallback on Act {i+1}: {res.stderr[-200:]}")
+                err_msg = res.stderr[-200:] if res and res.stderr else "Render failed or timed out"
+                log_warning("LONGFORM_EDITOR", f"Complex FX fallback on Act {i+1}: {err_msg}")
                 processed.append(seg_file)
 
         return processed
@@ -395,9 +454,10 @@ class LongformVideoEditor:
         concat_txt = job_temp / "concat.txt"
         with open(concat_txt, "w", encoding="utf-8") as f:
             for p in processed_files:
-                f.write(f"file '{p.resolve()}'\n")
+                f.write(f"file '{p.resolve().as_posix()}'\n")
 
         raw_assembled = job_temp / "raw_assembled.mp4"
+        log_stage(4, "Stitching 6 Narrative Acts", f"Merging {len(processed_files)} segments into seamless timeline")
         if progress_cb:
             progress_cb("Assembling 7-9m Feature & Stitching Acts...", 0.8)
 
@@ -405,67 +465,39 @@ class LongformVideoEditor:
         concat_cmd = [
             self.ffmpeg_path,
             "-y",
+            "-nostdin",
             "-f", "concat",
             "-safe", "0",
             "-i", str(concat_txt),
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "veryfast",
             "-crf", "20",
             "-c:a", "aac",
             "-b:a", "192k",
             str(raw_assembled)
         ]
-        subprocess.run(concat_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=360)
+        subprocess.run(concat_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=600)
 
-        # YouTube -14 LUFS Mastered Final Output with Dialogue Ducking
+        # Preserving natural character voices and stream audio cleanly
         safe_title = "".join(c for c in video_title if c.isalnum() or c in (" ", "_", "-")).rstrip().replace(" ", "_")
         final_video = self.output_dir / f"Feature_{safe_title}_{job_id[:8]}.mp4"
 
-        audio_bed = Path("assets/audio/master_audio_bed.wav")
-        if not audio_bed.exists():
-            # Build audio bed if not present
-            try:
-                subprocess.run(["python", "build_full_audio_bed.py"], check=True)
-            except Exception:
-                pass
-
+        log_stage(5, "Mastering Audio", "Preserving native stream audio cleanly without artificial BGM or SFX")
         if progress_cb:
-            progress_cb("Mastering Audio Bed, Dialogue Ducking & -14 LUFS Standard...", 0.9)
+            progress_cb("Finalizing audio & video assembly...", 0.9)
 
-        if audio_bed.exists():
-            # Dialogue Ducking + BGM / SFX layer
-            master_cmd = [
-                self.ffmpeg_path,
-                "-y",
-                "-i", str(raw_assembled),
-                "-i", str(audio_bed),
-                "-filter_complex",
-                (
-                    "[1:a]volume=0.32[music_bed];"
-                    "[music_bed][0:a]sidechaincompress=threshold=0.06:ratio=5:attack=25:release=350[ducked_bed];"
-                    "[0:a][ducked_bed]amix=inputs=2:duration=first:dropout_transition=2[mixed];"
-                    "[mixed]loudnorm=I=-14:TP=-1.5:LRA=11[final_a]"
-                ),
-                "-map", "0:v",
-                "-map", "[final_a]",
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                str(final_video)
-            ]
-        else:
-            master_cmd = [
-                self.ffmpeg_path,
-                "-y",
-                "-i", str(raw_assembled),
-                "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-                "-c:v", "copy",
-                "-c:a", "aac",
-                "-b:a", "192k",
-                str(final_video)
-            ]
+        master_cmd = [
+            self.ffmpeg_path,
+            "-y",
+            "-nostdin",
+            "-i", str(raw_assembled),
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            str(final_video)
+        ]
 
-        subprocess.run(master_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=300)
+        subprocess.run(master_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=600)
 
         if not final_video.exists() or final_video.stat().st_size < 10000:
             final_video = raw_assembled
@@ -478,12 +510,22 @@ class LongformVideoEditor:
         storyboard: List[Dict[str, Any]],
         final_video_path: Path
     ) -> Dict[str, Any]:
-        """Generate high-CTR Title, Description with Chapter timestamps, and SEO tags."""
+        """Generate high-CTR Title, Description with Chapter timestamps, and SEO tags based on stream content."""
         total_dur = sum(s["duration"] for s in storyboard)
+        raw_title = stream_meta.get("title", "Live Stream Event").strip()
+        channel = stream_meta.get("channel", "Creator").strip()
 
-        # High-CTR title options
-        title = f"We Tried To Kill The WARDEN... It Went HORRIBLY Wrong! (Full Raid)"
-        
+        # Clean title to extract essence
+        clean_title = raw_title.replace("BUYING", "I Bought").replace("buying", "I Bought")
+        if not any(hook in clean_title.upper() for hook in ["GONE WRONG", "MISTAKE", "CHAOS", "SURVIVED", "HORRIBLY", "UNHINGED"]):
+            high_ctr_title = f"{clean_title}... It Went HORRIBLY WRONG! (Full Story)"
+        else:
+            high_ctr_title = f"{clean_title} (BEST STREAM MOMENTS)"
+
+        # Ensure under 90 chars for YouTube title UX
+        if len(high_ctr_title) > 92:
+            high_ctr_title = high_ctr_title[:89] + "..."
+
         # Build YouTube Description with exact Chapter Timestamps
         chapters = []
         cur_time = 0.0
@@ -496,22 +538,20 @@ class LongformVideoEditor:
 
         chapters_str = "\n".join(chapters)
         description = (
-            f"We took on the Warden in Minecraft 1.20 Ancient City and everything descended into utter chaos!\n\n"
+            f"{raw_title}\n\n"
+            f"The best, unhinged moments edited into a fast-paced narrative story.\n\n"
             f"TIMESTAMPS:\n"
             f"{chapters_str}\n\n"
-            f"Watch the full adventure edited into a high-octane 8-minute raid.\n"
-            f"Original Stream: {stream_meta.get('title')}\n"
-            f"#Minecraft #Warden #Gaming #MinecraftRaid"
+            f"Creator: {channel}\n"
+            f"Original Stream: {raw_title}\n"
+            f"#Trending #LiveStream #Highlights #BestMoments"
         )
 
-        tags = [
-            "minecraft warden", "minecraft ancient city", "killing warden",
-            "minecraft stream highlights", "minecraft deep dark", "sculk shrieker",
-            "minecraft raid", "suzzane", "gaming moments", "minecraft 1.20"
-        ]
+        words = re.findall(r"[A-Za-z0-9]+", raw_title.lower())
+        tags = list(dict.fromkeys([w for w in words if len(w) > 3] + [channel.lower(), "stream highlights", "funny moments", "longform edit"]))[:12]
 
         metadata = {
-            "title": title,
+            "title": high_ctr_title,
             "description": description,
             "tags": tags,
             "duration_seconds": round(total_dur, 2),
@@ -532,7 +572,7 @@ class LongformVideoEditor:
     def execute_edit_pipeline(
         self,
         url: str,
-        focus_timestamp: float = 4210.0,
+        focus_timestamp: float = 0.0,
         target_runtime_sec: int = 480,
         progress_cb: Optional[Any] = None,
         prompt: Optional[str] = None,
@@ -542,6 +582,14 @@ class LongformVideoEditor:
         Complete end-to-end execution of the 7-9 minute Longform Video Editor Agent.
         """
         job_id = f"longform_{int(time.time())}"
+
+        # Prevent Windows Modern Standby / Sleep during longform video rendering
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)  # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+        except Exception:
+            pass
+
         log_stage(1, "Longform Video Editor Agent", f"Target: {target_runtime_sec}s (7-9m) | Stream: {url}")
 
         if progress_cb:
@@ -573,7 +621,8 @@ class LongformVideoEditor:
         storyboard = self.build_narrative_storyboard(
             duration=stream_meta["duration"],
             focus_timestamp=focus_timestamp,
-            target_runtime_sec=target_runtime_sec
+            target_runtime_sec=target_runtime_sec,
+            stream_title=stream_meta.get("title", "")
         )
 
         # Download segments
@@ -590,59 +639,69 @@ class LongformVideoEditor:
         # Packaging Metadata
         metadata = self.generate_youtube_metadata(stream_meta, storyboard, final_video)
 
-        # Upload to dedicated Supabase longform-videos bucket
+        # Upload to Supabase Storage if within free tier limits (< 48MB)
         try:
             from src.services.database import DatabaseService
             db = DatabaseService()
+            storage_url = None
             if db.client:
-                if progress_cb:
-                    progress_cb(f"Uploading Feature Video to Supabase Storage [{db.longform_bucket_name}]...", 0.95)
-                storage_url = db.upload_longform_video(str(final_video))
-                if storage_url:
-                    metadata["storage_url"] = storage_url
-                    meta_file = final_video.with_suffix(".json")
-                    with open(meta_file, "w", encoding="utf-8") as f:
-                        json.dump(metadata, f, indent=2)
-                    log_success("LONGFORM_EDITOR", f"Feature Video synced to Supabase [{db.longform_bucket_name}]: {storage_url}")
+                try:
+                    if progress_cb:
+                        progress_cb(f"Syncing Feature Video to Supabase Storage [{db.longform_bucket_name}]...", 0.95)
+                    storage_url = db.upload_longform_video(str(final_video))
+                    if storage_url:
+                        metadata["storage_url"] = storage_url
+                        meta_file = final_video.with_suffix(".json")
+                        with open(meta_file, "w", encoding="utf-8") as f:
+                            json.dump(metadata, f, indent=2)
+                        log_success("LONGFORM_EDITOR", f"Feature Video synced to Supabase [{db.longform_bucket_name}]: {storage_url}")
+                except Exception as su_err:
+                    log_warning("LONGFORM_EDITOR", f"Storage upload skipped/failed (will use local file): {su_err}")
 
-                # Register in database so feature appears in Pending Uploads
-                from src.models import ViralClip, VideoMetadata
-                lf_clip = ViralClip(
-                    start_time=0.0,
-                    end_time=float(metadata.get("duration_seconds", 480.0)),
-                    hook_title=metadata.get("title", stream_meta.get("title", "Feature Video")),
-                    hook_score=10,
-                    description=metadata.get("description", ""),
-                    tags=metadata.get("tags", ["feature", "longform"]),
-                    viral_reasoning=f"High-retention 6-act narrative feature video edited from '{stream_meta.get('title', '')}'."
-                )
-                lf_video_meta = VideoMetadata(
-                    video_id=stream_meta.get("video_id", "feature"),
-                    title=stream_meta.get("title", "Live Stream Feature"),
-                    author=stream_meta.get("author", "Creator"),
-                    duration=float(metadata.get("duration_seconds", 480.0)),
-                    resolution="1920x1080",
-                    filesize_mb=float(metadata.get("file_size_mb", 0.0)),
-                    was_live=True
-                )
-                db.save_clip_record(
-                    source_url=stream_meta.get("url", stream_meta.get("live_url", "")),
-                    video_meta=lf_video_meta,
-                    clip=lf_clip,
-                    storage_url=metadata.get("storage_url"),
-                    local_path=str(final_video),
-                    youtube_id=None,
-                    part_number=1,
-                    total_parts=1,
-                    is_confirmed=False
-                )
+            # ALWAYS register in database so feature video appears in Pending Uploads
+            from src.models import ViralClip, VideoMetadata
+            lf_clip = ViralClip(
+                start_time=0.0,
+                end_time=float(metadata.get("duration_seconds", 480.0)),
+                hook_title=metadata.get("title", stream_meta.get("title", "Feature Video")),
+                hook_score=10,
+                description=metadata.get("description", ""),
+                tags=metadata.get("tags", ["feature", "longform"]),
+                viral_reasoning=f"High-retention 6-act narrative feature video edited from '{stream_meta.get('title', '')}'."
+            )
+            lf_video_meta = VideoMetadata(
+                video_id=stream_meta.get("video_id", "feature"),
+                title=stream_meta.get("title", "Live Stream Feature"),
+                author=stream_meta.get("author", "Creator"),
+                duration=float(metadata.get("duration_seconds", 480.0)),
+                resolution="1920x1080",
+                filesize_mb=float(metadata.get("file_size_mb", 0.0)),
+                was_live=True
+            )
+            db.save_clip_record(
+                source_url=stream_meta.get("url", stream_meta.get("live_url", "")),
+                video_meta=lf_video_meta,
+                clip=lf_clip,
+                storage_url=metadata.get("storage_url") or "",
+                local_path=str(final_video),
+                youtube_id=None,
+                part_number=1,
+                total_parts=1,
+                is_confirmed=False
+            )
+            log_success("LONGFORM_EDITOR", f"Feature Video registered in database for Pending Uploads: {metadata.get('title')}")
         except Exception as e:
             log_warning("LONGFORM_EDITOR", f"Database registration note: {e}")
 
         if progress_cb:
             progress_cb(f"Completed! 7-9m Feature Ready: {metadata['duration_formatted']} ({metadata['file_size_mb']} MB)", 1.0)
 
-        log_success("LONGFORM_EDITOR", f"Longform Feature Video Complete! Output: {final_video}")
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)  # ES_CONTINUOUS
+        except Exception:
+            pass
+
         return {
             "job_id": job_id,
             "status": "success",

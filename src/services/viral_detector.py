@@ -32,8 +32,12 @@ ALGORITHMIC VIRAL CRITERIA:
    - ABSOLUTE SENTENCE BOUNDARY RULE: The clip MUST start cleanly at the onset of a complete sentence or strong statement, and MUST conclude cleanly at the completion of a full sentence (marked by '.', '!', or '?').
    - ZERO MID-SENTENCE CUTS: Never, under any circumstances, cut off someone midway while they are speaking or leave a thought dangling. No one watches Shorts that end abruptly mid-sentence!
 3. Retention Arc: Strong punchy opening -> compelling elaboration/tension/humor -> satisfying payoff or conclusion suitable for an infinite loop.
-4. Target Length: Total runtime should be between 35.0 and 58.0 seconds for standard YouTube Shorts (or up to 120.0s if authorized for live streams).
-5. High Shareability: High emotional payoff, counter-intuitive insight, comedy, life hack, or controversial debate point.
+4. FULL NARRATIVE RESOLUTION & ZERO CLIFFHANGERS (CRITICAL):
+   - NEVER end the clip on a build-up, anticipation clause, or cliffhanger (e.g. "look at what happens", "watch this", "wait for it", "he's about to...").
+   - The clip MUST capture the COMPLETE resolution: the action outcome, the fail/win, the punchline, the reaction, the laughter, or the answer to the curiosity hook.
+   - Always extend the end timestamp through the climax to capture 5 to 15 seconds of the immediate reaction/aftermath.
+5. Target Length: 59.0 seconds is strictly the MINIMUM floor, NOT a ceiling or limit. Total runtime should be between 59.0 and 150.0 seconds. If a scene, story, or event needs 75s, 90s, 110s, or 130s to reach its full payoff and reaction, YOU MUST EXTEND IT. You have up to 150.0 seconds—use the necessary time to deliver a satisfying climax and payoff.
+6. High Shareability: High emotional payoff, counter-intuitive insight, comedy, life hack, or controversial debate point.
 
 Provide a single contiguous start_time and end_time for the viral clip.
 
@@ -182,34 +186,36 @@ class ViralDetectorService:
 
         if allow_extended_duration:
             cut_instruction = (
-                "Select a single continuous, uninterrupted viral moment. "
-                "TARGET DURATION: If the peak moment naturally concludes within 35.0 to 60.0 seconds, keep it under 60.0 seconds. "
-                "CRITICAL EXTENSION RULE: If the full narrative arc, punchline, action climax, or payoff CANNOT fit within 60 seconds, "
-                "you are authorized to AUTONOMOUSLY EXTEND the continuous moment up to 120.0 seconds maximum so the scene finishes naturally. "
+                "Select a single continuous, uninterrupted viral moment from the broadcast strictly between 59.0 and 150.0 seconds. "
+                "CRITICAL PAYOFF & RESOLUTION MANDATE: 59.0 seconds is strictly the MINIMUM floor, NOT a limit or ceiling. "
+                "NEVER cut off right as something is about to happen! If tension or action is building up, you MUST extend the clip "
+                "through the entire climax, outcome, and immediate reaction/laughter (allowing 70s, 90s, 120s, up to 150.0s). "
                 "CRITICAL SPEECH INTEGRITY: The moment MUST start cleanly at the onset of a sentence and MUST end completely at a sentence finish (. ! ?). "
                 "Never cut off someone speaking midway. Do not split into multiple cuts; provide a single contiguous start_time and end_time."
             )
-            duration_rule = (
-                "Total Duration MUST be between 35.0 and 120.0 seconds. "
-                "(Aim for 38-58s for standard moments; extend up to 120.0s if needed to complete the full storyline or climax)."
-            )
-            max_clip_duration = 120.0
+            duration_rule = "Total Duration MUST be between 59.0 and 150.0 seconds (minimum 59.0s floor; extend up to 150.0s to capture full climax and reaction)."
+            max_clip_duration = 150.0
         elif allow_multi_cut:
             cut_instruction = (
-                "Select the most viral sequence strictly between 35.0 and 58.0 seconds. "
+                "Select the most viral sequence strictly between 59.0 and 150.0 seconds total runtime. "
+                "CRITICAL PAYOFF MANDATE: 59.0 seconds is strictly the MINIMUM floor, NOT a ceiling. "
+                "The final cut MUST include the complete resolution, punchline, and reaction. Never end on a cliffhanger or anticipation. "
                 "Every cut MUST end cleanly on a completed clause or sentence. Never cut off someone mid-word."
             )
-            duration_rule = "Total Duration MUST be strictly between 35.0 and 58.0 seconds."
-            max_clip_duration = 58.5
+            duration_rule = "Total Duration MUST be between 59.0 and 150.0 seconds (minimum 59.0s floor; extend up to 150.0s for complete payoff)."
+            max_clip_duration = 150.0
         else:
             cut_instruction = (
-                "Select a single continuous, uninterrupted viral moment strictly between 35.0 and 58.0 seconds. "
-                "CRITICAL: The moment MUST start cleanly at the beginning of a sentence and MUST end completely at a sentence finish (. ! ?). "
+                "Select a single continuous, uninterrupted viral moment strictly between 59.0 and 150.0 seconds. "
+                "CRITICAL PAYOFF & RESOLUTION MANDATE: 59.0 seconds is strictly the MINIMUM floor, NOT a limit or ceiling. "
+                "NEVER end the clip right as something is about to happen! If an action, story, or joke is building up, you MUST extend the clip "
+                "past the climax to include the outcome, scream, laugh, or reaction (e.g. 70s, 90s, 110s, up to 150.0s). "
+                "CRITICAL SPEECH INTEGRITY: The moment MUST start cleanly at the beginning of a sentence and MUST end completely at a sentence finish (. ! ?). "
                 "Under NO circumstances cut off someone who is speaking midway or leave a thought dangling. "
                 "Do not split into multiple cuts; provide a single contiguous start_time and end_time."
             )
-            duration_rule = "Total Duration MUST be strictly between 35.0 and 58.0 seconds."
-            max_clip_duration = 58.5
+            duration_rule = "Total Duration MUST be between 59.0 and 150.0 seconds (minimum 59.0s floor; extend up to 150.0s to capture full climax and reaction)."
+            max_clip_duration = 150.0
 
         user_prompt = f"""
 Analyze the following timestamped video transcript (Time Range: {min_timestamp:.1f}s to {max_timestamp:.1f}s, Duration: {transcript_duration:.1f} seconds).
@@ -315,10 +321,10 @@ TRANSCRIPT:
                     f"Multi-Cut Condensation: {len(snapped_cuts)} cuts spanning [{snapped_start:.1f}s -> {snapped_end:.1f}s] (Total Shorts Duration: {total_dur:.1f}s)",
                 )
             else:
-                snapped_start, snapped_end = self.snap_to_word_boundaries(raw_start, raw_end, transcription, max_limit, max_duration=max_clip_duration)
+                snapped_start, snapped_end = self.snap_to_word_boundaries(raw_start, raw_end, transcription, max_limit, max_duration=max_clip_duration, min_duration=59.0)
                 snapped_cuts = [ClipCut(start_time=snapped_start, end_time=snapped_end, role="clip")]
         else:
-            snapped_start, snapped_end = self.snap_to_word_boundaries(raw_start, raw_end, transcription, max_limit, max_duration=max_clip_duration)
+            snapped_start, snapped_end = self.snap_to_word_boundaries(raw_start, raw_end, transcription, max_limit, max_duration=max_clip_duration, min_duration=59.0)
             snapped_cuts = [ClipCut(start_time=snapped_start, end_time=snapped_end, role="clip")]
 
         viral_clip = ViralClip(
@@ -445,21 +451,38 @@ TRANSCRIPT:
 
         total_dur = sum(c.end_time - c.start_time for c in snapped_list)
 
-        # If too short, cleanly expand the last cut to the next sentence boundary
-        if total_dur < 40.0:
-            needed = 42.0 - total_dur
+        # Enforce minimum 59.0s: cleanly expand the last cut to the next sentence boundary, or first cut backwards
+        min_target = min(59.0, total_duration)
+        if total_dur < min_target:
+            needed = min_target - total_dur
             last_cut = snapped_list[-1]
             target_end = min(total_duration, last_cut.end_time + needed)
-            cands = [w for w in all_words if w.end >= target_end and w.end <= min(total_duration, target_end + 12.0)]
+            cands = [w for w in all_words if w.end >= target_end and w.end <= min(total_duration, target_end + 20.0)]
             if cands:
                 best = max(cands, key=lambda w: (25.0 if any(w.word.strip().endswith(p) for p in [".", "!", "?"]) else 0.0) - abs(w.end - target_end))
                 last_cut.end_time = best.end
+            else:
+                last_cut.end_time = target_end
             total_dur = sum(c.end_time - c.start_time for c in snapped_list)
+            # If still under min_target, expand the first cut backwards to earlier sentence boundary
+            if total_dur < min_target:
+                deficit = min_target - total_dur
+                earlier_start_cands = [
+                    w for w in all_words
+                    if w.start <= max(0.0, snapped_list[0].start_time - deficit)
+                ]
+                if earlier_start_cands:
+                    best_start = min(earlier_start_cands, key=lambda w: abs(w.start - max(0.0, snapped_list[0].start_time - deficit)))
+                    snapped_list[0].start_time = best_start.start
+                else:
+                    snapped_list[0].start_time = max(0.0, snapped_list[0].start_time - deficit)
 
-        # If too long (> 58.5s), walk backward to an earlier sentence/clause ending instead of slicing blindly
-        if total_dur > 58.5:
+        # Enforce maximum 150.0s: walk backward to an earlier sentence/clause ending instead of slicing blindly
+        max_target = 150.0
+        total_dur = sum(c.end_time - c.start_time for c in snapped_list)
+        if total_dur > max_target:
             last_cut = snapped_list[-1]
-            max_allowed_last_end = last_cut.start_time + max(4.0, (last_cut.end_time - last_cut.start_time) - (total_dur - 58.0))
+            max_allowed_last_end = last_cut.start_time + max(4.0, (last_cut.end_time - last_cut.start_time) - (total_dur - max_target))
             earlier_words = [
                 w for w in all_words
                 if w.end <= max_allowed_last_end and w.end >= (last_cut.start_time + 4.0)
@@ -470,6 +493,8 @@ TRANSCRIPT:
                     key=lambda w: (30.0 if any(w.word.strip().endswith(p) for p in [".", "!", "?"]) else 0.0) + w.end,
                 )
                 last_cut.end_time = best_earlier.end
+            else:
+                last_cut.end_time = max_allowed_last_end
 
         return snapped_list
 
@@ -479,7 +504,8 @@ TRANSCRIPT:
         raw_end: float,
         transcription: FullTranscription,
         total_duration: float,
-        max_duration: float = 59.0,
+        max_duration: float = 150.0,
+        min_duration: float = 59.0,
     ) -> Tuple[float, float]:
         """
         Refines raw LLM timestamps by intelligently snapping to exact sentence & word boundaries:
@@ -487,15 +513,22 @@ TRANSCRIPT:
         2. Detects full sentence completions (prioritizing punctuation '.', '!', '?' and natural speech pauses >= 0.4s).
         3. Never cuts someone off midway through a word, syllable, or dangling thought.
         4. Adds natural release decay padding (+0.15s to +0.18s) so trailing consonants and speech resonance are preserved.
-        5. Enforces valid duration strictly within [30.0s, max_duration] without arbitrary mathematical slicing.
+        5. Enforces valid duration strictly within [59.0s, max_duration] (or total_duration if total_duration < 59.0s).
         """
+        effective_min = min(min_duration, total_duration)
+        effective_max = min(max_duration, total_duration)
+
         all_words: List[Any] = []
         for seg in transcription.segments:
             all_words.extend(seg.words)
 
         if not all_words:
             s = max(0.0, raw_start)
-            e = min(total_duration, s + min(max_duration, max(30.0, raw_end - raw_start)))
+            if total_duration >= effective_min and (total_duration - s) < effective_min:
+                s = max(0.0, total_duration - effective_min)
+            raw_d = raw_end - raw_start if raw_end > raw_start else effective_min
+            d = max(effective_min, min(effective_max, raw_d))
+            e = min(total_duration, s + d)
             return round(s, 2), round(e, 2)
 
         filler_words = {"um", "uh", "uhm", "er", "ah", "like", "so", "actually", "basically"}
@@ -512,7 +545,7 @@ TRANSCRIPT:
         # -------------------------------------------------------------
         closest_idx = min(range(len(all_words)), key=lambda i: abs(all_words[i].start - raw_start))
 
-        # Check backwards up to 4 words or 1.8s for a clean sentence onset preceding raw_start
+        # Check backwards up to 5 words for a clean sentence onset preceding raw_start
         start_idx = closest_idx
         for i in range(closest_idx, max(-1, closest_idx - 5), -1):
             if i == 0:
@@ -535,15 +568,36 @@ TRANSCRIPT:
 
         snapped_start = all_words[start_idx].start
 
+        # Ensure snapped_start leaves at least effective_min seconds before total_duration
+        if total_duration >= effective_min and (total_duration - snapped_start) < effective_min:
+            target_start_limit = max(0.0, total_duration - effective_min)
+            earlier_indices = [
+                i for i in range(start_idx)
+                if all_words[i].start <= target_start_limit
+            ]
+            if earlier_indices:
+                best_start_idx = earlier_indices[-1]
+                for i in reversed(earlier_indices):
+                    if i == 0:
+                        best_start_idx = 0
+                        break
+                    prev_w = all_words[i - 1]
+                    if any(prev_w.word.strip().endswith(p) for p in sentence_enders) or (all_words[i].start - prev_w.end) >= 0.4:
+                        best_start_idx = i
+                        break
+                start_idx = best_start_idx
+                snapped_start = all_words[start_idx].start
+            else:
+                start_idx = 0
+                snapped_start = all_words[0].start
+
         # -------------------------------------------------------------
         # STEP 2: Smart Sentence-Ending Snapping
         # -------------------------------------------------------------
-        min_dur = 35.0 if max_duration > 60.0 else 30.0
-        min_end_time = snapped_start + min_dur
-        max_end_time = min(total_duration, snapped_start + max_duration)
-
-        raw_dur = raw_end - raw_start if raw_end > raw_start else 48.0
-        target_len = max(min_dur, min(max_duration - 1.0, raw_dur))
+        raw_dur = raw_end - raw_start if raw_end > raw_start else effective_min
+        target_len = max(effective_min, min(effective_max - 1.0, raw_dur))
+        min_end_time = snapped_start + effective_min
+        max_end_time = min(total_duration, snapped_start + effective_max)
         target_end_time = min(max_end_time - 0.2, snapped_start + target_len)
 
         # Candidates strictly within [min_end_time, max_end_time]
@@ -553,11 +607,22 @@ TRANSCRIPT:
         ]
 
         if not end_candidates:
-            # Expand downward if audio or transcript is shorter
-            end_candidates = [
-                (idx, w) for idx, w in enumerate(all_words[start_idx:], start=start_idx)
-                if (w.end + 0.15) <= max_end_time and (w.end - snapped_start) >= 15.0
-            ]
+            # If speech ends too early from current snapped_start, attempt moving start_idx earlier
+            if start_idx > 0:
+                for earlier_idx in reversed(range(start_idx)):
+                    potential_start = all_words[earlier_idx].start
+                    candidates_now = [
+                        (idx, w) for idx, w in enumerate(all_words[earlier_idx:], start=earlier_idx)
+                        if (w.end + 0.15) <= min(total_duration, potential_start + effective_max) and w.end >= (potential_start + effective_min)
+                    ]
+                    if candidates_now:
+                        start_idx = earlier_idx
+                        snapped_start = potential_start
+                        min_end_time = snapped_start + effective_min
+                        max_end_time = min(total_duration, snapped_start + effective_max)
+                        target_end_time = min(max_end_time - 0.2, snapped_start + target_len)
+                        end_candidates = candidates_now
+                        break
 
         if not end_candidates:
             valid_words = [
@@ -567,18 +632,26 @@ TRANSCRIPT:
             if valid_words:
                 best_idx, best_end_word = max(valid_words, key=lambda it: it[1].end)
             else:
-                return round(snapped_start, 2), round(min(total_duration, snapped_start + min(max_duration, 45.0)), 2)
+                return round(snapped_start, 2), round(min(total_duration, snapped_start + effective_min), 2)
         else:
             def score_end_cand(item: Tuple[int, Any]) -> float:
                 idx, w = item
                 text = w.word.strip()
                 clean_tok = text.lower().rstrip(".,!?;:-")
-                dist = abs(w.end - target_end_time)
-                score = -dist * 1.5
+                
+                # Asymmetric distance penalty: penalize ending too early much more than extending to capture the payoff
+                if w.end < target_end_time:
+                    dist_penalty = (target_end_time - w.end) * 1.8
+                else:
+                    dist_penalty = (w.end - target_end_time) * 0.4
+                score = -dist_penalty
 
                 # Top Priority: Sentence-ending punctuation (. ! ?)
                 if any(text.endswith(p) for p in sentence_enders):
                     score += 55.0
+                    # Major bonus for excitement, reaction, shock, laughter endings
+                    if text.endswith("!"):
+                        score += 25.0
                 elif any(text.endswith(p) for p in clause_enders):
                     score += 15.0
 
@@ -596,9 +669,24 @@ TRANSCRIPT:
                 if clean_tok in dangling_words:
                     score -= 60.0
 
-                # Duration bonus for Shorts sweet spot (40s to 56s)
+                # Severe Penalty: Anticipation / cliffhanger phrases (clip ends right as something is about to happen)
+                preceding_tokens = [
+                    all_words[j].word.strip().lower().rstrip(".,!?;:-")
+                    for j in range(max(start_idx, idx - 4), idx + 1)
+                ]
+                anticipation_stems = {
+                    "watch", "look", "wait", "see", "about", "ready", "incoming", "next",
+                    "gonna", "going", "happens", "happened", "check", "listen", "guess",
+                    "suddenly", "starts", "trying"
+                }
+                if any(tok in anticipation_stems for tok in preceding_tokens):
+                    score -= 75.0
+
+                # Generous duration bonus across 59s to 120s range
                 dur = w.end - snapped_start
-                if max_duration <= 60.0 and 40.0 <= dur <= 56.0:
+                if 59.0 <= dur <= 110.0:
+                    score += 20.0
+                elif dur > 110.0:
                     score += 10.0
 
                 return score
@@ -606,23 +694,31 @@ TRANSCRIPT:
             best_idx, best_end_word = max(end_candidates, key=score_end_cand)
 
         # -------------------------------------------------------------
-        # STEP 3: Natural Vocal Release Decay Padding (+0.15s)
+        # STEP 3: Natural Vocal Release Decay Padding (+0.18s to +0.30s)
         # -------------------------------------------------------------
-        # Preserve trailing consonants and speech resonance cleanly
+        target_padding = 0.30 if any(best_end_word.word.strip().endswith(p) for p in ["!", "?"]) else 0.18
         if best_idx < len(all_words) - 1:
             next_word_start = all_words[best_idx + 1].start
             max_padding = max(0.0, next_word_start - best_end_word.end - 0.03)
-            padding = min(0.18, max_padding)
+            padding = min(target_padding, max_padding)
         else:
-            padding = min(0.18, max(0.0, total_duration - best_end_word.end))
+            padding = min(target_padding, max(0.0, total_duration - best_end_word.end))
 
         snapped_end = best_end_word.end + padding
 
-        # Absolute hard bounds
-        if (snapped_end - snapped_start) > max_duration:
-            snapped_end = snapped_start + max_duration
+        # Absolute hard bounds: max_duration
+        if (snapped_end - snapped_start) > effective_max:
+            snapped_end = snapped_start + effective_max
         if snapped_end > total_duration:
             snapped_end = total_duration
+
+        # Absolute hard bounds: min_duration
+        if (snapped_end - snapped_start) < effective_min and total_duration >= effective_min:
+            if snapped_start + effective_min <= total_duration:
+                snapped_end = snapped_start + effective_min
+            else:
+                snapped_end = total_duration
+                snapped_start = max(0.0, snapped_end - effective_min)
 
         return round(max(0.0, snapped_start), 2), round(snapped_end, 2)
 

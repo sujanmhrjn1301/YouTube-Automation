@@ -3,6 +3,8 @@ Main CLI Application and Pipeline Orchestrator.
 Automates extraction, reframing, subtitling, and uploading of viral segments from YouTube videos.
 """
 
+import os
+import re
 import sys
 import time
 
@@ -45,7 +47,7 @@ from src.services.transcription import TranscriptionService
 from src.services.video_processor import VideoProcessorService
 from src.services.viral_detector import ViralDetectorService
 from src.services.youtube_uploader import YouTubeUploaderService
-from src.utils import generate_short_filename, slice_transcription
+from src.utils import generate_short_filename, slice_transcription, clean_standalone_short_title
 
 
 @click.command(help="Automate extraction, reframing, subtitling, and uploading of viral YouTube Shorts.")
@@ -181,8 +183,8 @@ from src.utils import generate_short_filename, slice_transcription
 )
 @click.option(
     "--bleep-profanity / --no-bleep-profanity",
-    default=True,
-    help="Automatically detect English swear words and censor with standard 1000Hz bleeps.",
+    default=False,
+    help="Automatically detect English swear words and censor with standard 1000Hz bleeps (default: False).",
 )
 @click.option(
     "--monitor-stream",
@@ -237,7 +239,7 @@ def run_pipeline(
         from src.services.stream_monitor import StreamMonitorAgent
         agent = StreamMonitorAgent(
             target_url=url,
-            chunk_duration=150,
+            chunk_duration=180,
             crop_mode=crop_mode.lower(),
             bleep_profanity=bleep_profanity,
             auto_upload=auto_upload,
@@ -331,12 +333,20 @@ def run_pipeline(
         is_post_livestream = bool(stream_mode or getattr(video_meta, "was_live", False) or video_meta.duration >= 7200.0)
 
         effective_clips_count = clips_count if clips_count > 0 else 3
-        if video_meta.duration < 90.0:
-            effective_clips_count = 1
-        elif video_meta.duration < 180.0:
-            effective_clips_count = min(2, effective_clips_count)
+        # Ensure requested clip count physically fits the video duration (minimum ~40s per Short candidate)
+        max_possible_clips = max(1, int(video_meta.duration // 40.0))
+        effective_clips_count = min(effective_clips_count, max_possible_clips)
 
-        peak_window_dur = 150.0 if is_post_livestream else 120.0
+        # Scale candidate window duration adaptively based on mode, video duration, and clip count
+        if is_post_livestream:
+            # Livestream archives: 1h to 6h+ -> 120s to 180s windows
+            peak_window_dur = min(180.0, max(90.0, video_meta.duration / max(1, effective_clips_count * 1.5)))
+        else:
+            # Standard edited videos: 3m to 25m -> 65s to 120s windows so multiple distinct moments can be isolated
+            peak_window_dur = min(120.0, max(60.0, video_meta.duration / max(1, effective_clips_count * 1.15)))
+        if video_meta.duration < peak_window_dur:
+            peak_window_dur = video_meta.duration
+
         log_stage(2, "Peak Detection & Multi-Part Extraction", f"Waveform Energy Scanning (Target: {effective_clips_count} Peak Parts)")
         peak_detector = PeakDetectorService()
         peaks = peak_detector.find_top_peak_windows(
@@ -359,13 +369,19 @@ def run_pipeline(
                 )
                 if custom_scenes:
                     log_info("ORCHESTRATOR", f"Integrating {len(custom_scenes)} custom directives/pinned scenes into Short candidates.")
+                    combined_peaks = []
                     for cs in custom_scenes:
-                        peaks.insert(0, (cs["start"], cs["end"], cs.get("confidence", 1.0)))
+                        combined_peaks.append((cs["start"], cs["end"], cs.get("confidence", 1.0)))
+                    for p_start, p_end, p_score in peaks:
+                        if not any(abs(p_start - cp[0]) < 30.0 for cp in combined_peaks):
+                            combined_peaks.append((p_start, p_end, p_score))
+                    peaks = combined_peaks[:effective_clips_count]
             except Exception as e:
                 log_warning("ORCHESTRATOR", f"Scene search error: {e}")
 
-        total_parts = len(peaks)
-        log_info("ORCHESTRATOR", f"Extracted {total_parts} chronological peak moments for multi-part Short series.")
+        peaks = peaks[:effective_clips_count]
+        total_clips = len(peaks)
+        log_info("ORCHESTRATOR", f"Extracted {total_clips} chronological peak moments for Shorts.")
 
         transcription_service = TranscriptionService(model_size=model_size.lower())
         viral_detector = ViralDetectorService(provider=llm_provider.lower(), model=llm_model)
@@ -378,11 +394,11 @@ def run_pipeline(
         uploaded_in_this_run = 0
 
         for idx, (p_start, p_end, p_score) in enumerate(peaks):
-            part_num = idx + 1
-            part_label = f"Part {part_num}/{total_parts}" if total_parts > 1 else f"Short #{part_num}"
+            clip_num = idx + 1
+            clip_label = f"Clip #{clip_num} ({clip_num}/{total_clips})"
             console.print(f"\n[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
-            log_info("ORCHESTRATOR", f"Processing {part_label} [{p_start:.1f}s -> {p_end:.1f}s] (Peak Score: {p_score})")
-            log_stage(4, f"Clipping Video {part_num}/{total_parts}", f"Processing {part_label} ({idx}/{total_parts} videos done)")
+            log_info("ORCHESTRATOR", f"Processing {clip_label} [{p_start:.1f}s -> {p_end:.1f}s] (Peak Score: {p_score})")
+            log_stage(4, f"Clipping Video {clip_num}/{total_clips}", f"Processing {clip_label} ({idx}/{total_clips} videos done)")
 
             # Fast targeted transcription of only this candidate window
             window_transcript = transcription_service.transcribe_window(
@@ -392,8 +408,8 @@ def run_pipeline(
                 video_id=video_meta.video_id,
             )
             if not window_transcript.segments:
-                log_warning("ORCHESTRATOR", f"No dialogue detected in {part_label}. Skipping...")
-                log_info("ORCHESTRATOR", f"Progress: {part_num}/{total_parts} videos done ({part_label} skipped)")
+                log_warning("ORCHESTRATOR", f"No dialogue detected in {clip_label}. Skipping...")
+                log_info("ORCHESTRATOR", f"Progress: {clip_num}/{total_clips} videos done ({clip_label} skipped)")
                 continue
 
             allow_cuts = bool(multi_cut and not is_post_livestream and not single_clip)
@@ -403,18 +419,17 @@ def run_pipeline(
                 allow_extended_duration=is_post_livestream,
             )
 
-            # Auto-label title with [Part X] if multi-part series
-            if total_parts > 1:
-                clean_t = viral_clip.hook_title.replace("#Shorts", "").replace("#shorts", "").strip()
-                if f"part {part_num}" not in clean_t.lower() and f"part-{part_num}" not in clean_t.lower():
-                    clean_t = f"{clean_t} [Part {part_num}]"
-                viral_clip.hook_title = f"{clean_t} #Shorts"
+            # Clean standalone title without Part numbers
+            viral_clip.hook_title = clean_standalone_short_title(
+                viral_clip.hook_title,
+                fallback_label=f"Viral Moment #{clip_num}",
+            )
 
             descriptive_filename = generate_short_filename(
                 title=viral_clip.hook_title,
                 video_id=video_meta.video_id,
                 duration=viral_clip.total_duration,
-                clip_index=part_num,
+                clip_index=clip_num,
                 is_livestream=is_post_livestream,
             )
 
@@ -437,7 +452,7 @@ def run_pipeline(
             cropped_path = video_processor.process_clip(
                 input_video_path=video_meta.video_path,
                 clip=viral_clip,
-                video_id=f"{video_meta.video_id}_part{part_num}",
+                video_id=f"{video_meta.video_id}_clip{clip_num}",
                 bleep_intervals=bleep_intervals,
             )
 
@@ -448,7 +463,7 @@ def run_pipeline(
                 effective_captions = False
 
             if not effective_captions:
-                log_info("ORCHESTRATOR", f"⏩ [CLEAN STREAM] Skipping subtitle burn for {part_label} (single continuous clean clip).")
+                log_info("ORCHESTRATOR", f"⏩ [CLEAN STREAM] Skipping subtitle burn for {clip_label} (single continuous clean clip).")
                 import shutil
                 final_video_path = str(settings.OUTPUT_DIR / descriptive_filename)
                 shutil.copy2(cropped_path, final_video_path)
@@ -458,7 +473,7 @@ def run_pipeline(
                     video_path=cropped_path,
                     transcription=window_transcript,
                     clip=viral_clip,
-                    video_id=f"{video_meta.video_id}_part{part_num}",
+                    video_id=f"{video_meta.video_id}_clip{clip_num}",
                     output_filename=descriptive_filename,
                 )
 
@@ -471,8 +486,8 @@ def run_pipeline(
                 if uploaded_in_this_run >= 1 and not upload_all_parts:
                     log_info(
                         "ORCHESTRATOR",
-                        f"💾 [SAVED TO QUEUE] {part_label} saved to Supabase & disk for scheduled upload.\n"
-                        f"    (Only Part 1 is auto-uploaded now to protect your channel from spam).",
+                        f"💾 [SAVED TO QUEUE] {clip_label} saved to Supabase & disk for scheduled upload.\n"
+                        f"    (First clip auto-uploaded immediately; remaining queued to protect channel).",
                     )
                     status_text = "💾 Saved (Pending Queue)"
                 else:
@@ -485,7 +500,7 @@ def run_pipeline(
                     if existing_yt_id:
                         log_warning(
                             "ORCHESTRATOR",
-                            f"⏭️  [DUPLICATE AVOIDED] {part_label} was already uploaded to YouTube!\n"
+                            f"⏭️  [DUPLICATE AVOIDED] {clip_label} was already uploaded to YouTube!\n"
                             f"    YouTube ID: {existing_yt_id}\n"
                             f"    URL: https://www.youtube.com/shorts/{existing_yt_id}\n"
                             f"    Skipping upload to avoid duplicate content on your channel.",
@@ -502,7 +517,7 @@ def run_pipeline(
                             status_text = "✅ Confirmed Uploaded"
                             is_confirmed = True
                             uploaded_in_this_run += 1
-                            db_service.mark_part_confirmed(video_meta.video_id, part_num, yt_id)
+                            db_service.mark_part_confirmed(video_meta.video_id, 1, yt_id)
                         else:
                             status_text = "⚠️ Upload Skipped / Failed"
 
@@ -517,13 +532,13 @@ def run_pipeline(
                 storage_url=st_url,
                 local_path=subtitled_path,
                 youtube_id=yt_id,
-                part_number=part_num,
-                total_parts=total_parts,
+                part_number=1,
+                total_parts=1,
                 is_confirmed=is_confirmed,
             )
 
             series_results.append({
-                "part": f"Part {part_num}/{total_parts}" if total_parts > 1 else "Short #1",
+                "part": f"Clip #{clip_num}",
                 "title": viral_clip.hook_title,
                 "duration": f"{viral_clip.total_duration:.1f}s",
                 "status": status_text,
@@ -531,19 +546,19 @@ def run_pipeline(
                 "youtube": yt_url or "Saved locally",
                 "supabase": st_url or "Local only",
             })
-            log_success("ORCHESTRATOR", f"✅ Progress: {part_num}/{total_parts} videos done ({part_label} complete)")
+            log_success("ORCHESTRATOR", f"✅ Progress: {clip_num}/{total_clips} videos done ({clip_label} complete)")
 
         total_elapsed = time.time() - start_total_time
         result.success = True
 
-        # Render rich multi-part series tracking table
+        # Render rich viral shorts tracking table
         from rich.table import Table
         series_table = Table(
-            title=f"🎬 Multi-Part Series Tracking Table: {video_meta.title[:65]}",
+            title=f"🎬 Extracted Viral Shorts Table: {video_meta.title[:65]}",
             style="bold cyan",
             header_style="bold magenta",
         )
-        series_table.add_column("Part", style="bold yellow", justify="center")
+        series_table.add_column("Clip", style="bold yellow", justify="center")
         series_table.add_column("Short Hook Title", style="bold white")
         series_table.add_column("Duration", justify="center", style="dim white")
         series_table.add_column("Upload Status", justify="center")
@@ -567,13 +582,13 @@ def run_pipeline(
 
         summary_dict = {
             "Total Pipeline Runtime": f"{total_elapsed:.2f} seconds",
-            "Extracted Shorts": f"{len(series_results)} Parts",
+            "Extracted Shorts": f"{len(series_results)} Clips",
             "Video Title": video_meta.title,
             "Video ID": video_meta.video_id,
         }
         for i, s in enumerate(series_results):
-            summary_dict[f"Part {i + 1}"] = f"{s['title']} ({s['duration']})\nStatus: {s['status']}\nURL: {s['youtube']}"
-        log_table("🎉 Multi-Part Series Execution Completed Successfully", summary_dict)
+            summary_dict[f"Clip {i + 1}"] = f"{s['title']} ({s['duration']})\nStatus: {s['status']}\nURL: {s['youtube']}"
+        log_table("🎉 Viral Shorts Pipeline Completed Successfully", summary_dict)
 
         # Auto-clean heavy raw source video and audio unless --keep-raw is set
         if cleanup_raw and not keep_raw:

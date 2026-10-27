@@ -47,10 +47,10 @@ class StreamMonitorAgent:
     def __init__(
         self,
         target_url: str,
-        chunk_duration: int = 150,
+        chunk_duration: int = 180,
         poll_interval: int = 45,
         crop_mode: str = "blurred_background",
-        bleep_profanity: bool = True,
+        bleep_profanity: bool = False,
         auto_upload: bool = False,
         max_clips: int = 0,
         llm_provider: str = "openrouter",
@@ -322,8 +322,8 @@ class StreamMonitorAgent:
                 storage_url=st_url,
                 local_path=str(subtitled_path),
                 youtube_id=yt_id,
-                part_number=clip_index,
-                total_parts=clip_index,
+                part_number=1,
+                total_parts=1,
                 is_confirmed=bool(yt_id),
             )
             log_success("STREAM_MONITOR", f"Live clip registered in Pending Uploads & Highlights DB (ID: {rec_id})")

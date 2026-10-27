@@ -12,7 +12,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=70">
+  <link rel="stylesheet" href="/styles.css?v=81">
 </head>
 
 <body>
@@ -195,6 +195,16 @@
         <path
           d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
       </symbol>
+      <symbol id="i-instagram" viewBox="0 0 24 24">
+        <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+      </symbol>
+      <symbol id="i-sparkles" viewBox="0 0 24 24">
+        <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
+        <path d="M19 3v4" />
+        <path d="M21 5h-4" />
+      </symbol>
     </defs>
   </svg>
 
@@ -219,7 +229,7 @@
 
         <div class="brand-text">
           <div class="brand-name">Shorts Studio</div>
-          <div class="brand-sub" id="sidebar-account-handle">@eijishorts</div>
+          <div class="brand-sub" id="sidebar-account-handle">@speedshorts-yt5</div>
         </div>
 
         <!-- Sidebar Collapse Button in expanded mode (top-right of header) -->
@@ -242,6 +252,9 @@
         <a href="#/live" class="nav-item" data-view="live" id="nav-live" title="Live agent"><svg class="icon">
             <use href="#i-radio" />
           </svg><span class="nav-text">Live Agent</span></a>
+        <a href="#/postprocess" class="nav-item" data-view="postprocess" id="nav-postprocess" title="Post-Process Studio"><svg class="icon">
+            <use href="#i-sparkles" />
+          </svg><span class="nav-text">Post-Process</span></a>
         <a href="#/publish" class="nav-item" data-view="publish" id="nav-publish" title="Pending Uploads"><svg
             class="icon">
             <use href="#i-send" />
@@ -279,8 +292,8 @@
             <span class="sidebar-account-dot ok" id="sidebar-account-dot"></span>
           </div>
           <div class="sidebar-account-details">
-            <div class="sidebar-account-title" id="sidebar-account-name">Eiji Shorts</div>
-            <div class="sidebar-account-handle-text" id="sidebar-account-handle-badge">@eijishorts</div>
+            <div class="sidebar-account-title" id="sidebar-account-name">speedshorts-yt5</div>
+            <div class="sidebar-account-handle-text" id="sidebar-account-handle-badge">@speedshorts-yt5</div>
           </div>
           <button type="button" class="sidebar-account-toggle-btn" id="sidebar-account-toggle-btn"
             aria-label="Switch account" title="Switch account">
@@ -294,8 +307,8 @@
         <div class="sidebar-account-menu" id="sidebar-account-menu" hidden>
           <div class="sidebar-account-menu-item active" data-account-id="alternate">
             <div class="sidebar-menu-item-info">
-              <strong class="sidebar-menu-item-name">EIJI Shorts</strong>
-              <span class="sidebar-menu-item-handle">@eijishorts</span>
+              <strong class="sidebar-menu-item-name">speedshorts-yt5</strong>
+              <span class="sidebar-menu-item-handle">@speedshorts-yt5</span>
               <span class="sidebar-menu-item-email">mhrznsuzan.alternate@gmail.com</span>
             </div>
             <svg class="icon custom-dropdown-check">
@@ -323,7 +336,7 @@
       <header class="topbar">
         <div class="topbar-title-wrap">
           <h1 id="page-title">Overview</h1>
-          <p id="page-sub" class="muted">Your pipeline at a glance.</p>
+          <p id="page-sub" class="muted" style="display:none;"></p>
         </div>
 
         <div class="topbar-actions">
@@ -419,7 +432,7 @@
                 <span class="quick-icon"><svg class="icon">
                     <use href="#i-scissors" />
                   </svg></span>
-                <span><strong>Create Shorts</strong><small>Turn any video into vertical clips</small></span>
+                <span><strong>Create Shorts</strong></span>
                 <svg class="icon chev">
                   <use href="#i-chevron" />
                 </svg>
@@ -428,7 +441,7 @@
                 <span class="quick-icon"><svg class="icon">
                     <use href="#i-radio" />
                   </svg></span>
-                <span><strong>Watch a livestream</strong><small>Clip moments while it is live</small></span>
+                <span><strong>Watch a livestream</strong></span>
                 <svg class="icon chev">
                   <use href="#i-chevron" />
                 </svg>
@@ -437,7 +450,7 @@
                 <span class="quick-icon"><svg class="icon">
                     <use href="#i-send" />
                   </svg></span>
-                <span><strong>Publish the queue</strong><small>Send saved Shorts to YouTube</small></span>
+                <span><strong>Publish the queue</strong></span>
                 <svg class="icon chev">
                   <use href="#i-chevron" />
                 </svg>
@@ -455,8 +468,7 @@
               <div class="meter">
                 <div class="meter-fill" id="q-fill"></div>
               </div>
-              <div class="quota-meta muted" id="q-meta-text">Target: 6 uploads/day minimum · Unlimited uploads allowed ·
-                Resets daily at midnight</div>
+              <div class="quota-meta muted" id="q-meta-text">Target: 6 uploads/day · Resets at midnight</div>
             </div>
           </div>
         </div>
@@ -486,31 +498,26 @@
                 <div class="mode-btn-head"><svg class="icon">
                     <use href="#i-scissors" />
                   </svg>Normal Video</div>
-                <div class="mode-btn-sub">Clip other YouTubers' regular videos</div>
               </button>
               <button type="button" class="mode-btn" data-mode="stream" aria-checked="false">
                 <div class="mode-btn-head"><svg class="icon">
                     <use href="#i-film" />
                   </svg>Post Livestream</div>
-                <div class="mode-btn-sub">Clip finished/concluded live streams</div>
               </button>
               <button type="button" class="mode-btn" data-mode="live" aria-checked="false">
                 <div class="mode-btn-head"><svg class="icon">
                     <use href="#i-radio" />
                   </svg>Monitor Live</div>
-                <div class="mode-btn-sub">Watch active live stream in real time</div>
               </button>
               <button type="button" class="mode-btn" data-mode="longform" aria-checked="false" id="mode-btn-longform">
                 <div class="mode-btn-head"><svg class="icon">
                     <use href="#i-film" />
                   </svg>Video Edit</div>
-                <div class="mode-btn-sub">7 to 9 min narrative YouTube video</div>
               </button>
               <button type="button" class="mode-btn" data-mode="montage" aria-checked="false" id="mode-btn-montage">
                 <div class="mode-btn-head"><svg class="icon">
                     <use href="#i-activity" />
                   </svg>Viral Montage</div>
-                <div class="mode-btn-sub">Peak audio chaos &amp; highlights edit</div>
               </button>
             </div>
 
@@ -561,8 +568,7 @@
                   </svg>
                 </button>
               </div>
-              <span class="field-hint" id="create-url-hint">Enter the YouTube video URL to analyze and extract viral
-                Shorts.</span>
+              <span class="field-hint" id="create-url-hint" style="display:none;"></span>
             </div>
 
             <!-- Mode-specific options: Live controls only show when mode=live -->
@@ -610,9 +616,8 @@
               <div class="field">
                 <span class="field-label">Key Moment Focus Timestamp (Optional)</span>
                 <input type="text" id="longform-focus-ts" class="input"
-                  placeholder="e.g. 4210 or 01:10:10 (Auto-detected from URL)" value="4210">
-                <span class="field-hint">Anchor the 6-act narrative arc around a key boss fight, raid, or climax (Warden
-                  encounter at 4210s).</span>
+                  placeholder="e.g. 00:45:00 or leave empty for auto-detect" value="">
+                <span class="field-hint">Anchor the 6-act narrative arc around a key moment (or leave blank to auto-detect peak moments).</span>
               </div>
 
               <div class="field">
@@ -628,7 +633,7 @@
                   </label>
                   <label class="checkbox-row"
                     style="padding:10px; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); border:1px solid rgba(255,255,255,0.05); cursor:pointer;">
-                    <input type="checkbox" id="longform-chapter-cards" checked>
+                    <input type="checkbox" id="longform-chapter-cards">
                     <div>
                       <strong>Chapter Lower-Thirds</strong>
                       <div class="muted small">Cinematic Act titles on screen</div>
@@ -710,7 +715,7 @@
                   <span class="field-label">Number of Shorts</span>
                   <span class="field-hint">Peak moments to extract</span>
                 </div>
-                <div class="stepper" data-name="clips" data-min="1" data-max="10" id="process-clips">
+                <div class="stepper" data-name="clips" data-min="1" data-max="20" id="process-clips">
                   <button type="button" data-step="-1" aria-label="Fewer">–</button>
                   <output>3</output>
                   <button type="button" data-step="1" aria-label="More">+</button>
@@ -784,13 +789,12 @@
                   </ul>
                   <input type="hidden" id="custom-search-engine" value="both" />
                 </div>
-                <span class="field-hint" id="custom-engine-hint">Combines TwelveLabs spatio-temporal action embeddings
-                  with Whisper transcripts &amp; audio peak energy.</span>
+                <span class="field-hint" id="custom-engine-hint" style="display:none;"></span>
               </div>
             </div>
 
             <label class="toggle-row">
-              <span><strong>Publish to YouTube</strong><small>Otherwise saved to Supabase cloud queue</small></span>
+              <span><strong>Publish to YouTube</strong></span>
               <input type="checkbox" name="autoUpload" class="switch" id="process-autoupload">
             </label>
 
@@ -799,14 +803,11 @@
                   <use href="#i-chevron" />
                 </svg>Advanced</summary>
               <div class="advanced-body">
-                <label class="toggle-row"><span><strong>Enable Captions</strong><small>Burn animated karaoke
-                      subtitles (Default: clean clip)</small></span><input type="checkbox" name="enableCaptions"
+                <label class="toggle-row"><span><strong>Enable Captions</strong></span><input type="checkbox" name="enableCaptions"
                     class="switch" id="process-enable-captions"></label>
-                <label class="toggle-row"><span><strong>Keep swear words</strong><small>Disable censor
-                      bleeps</small></span><input type="checkbox" name="noBleep" class="switch"
+                <label class="toggle-row"><span><strong>Beep swear words</strong></span><input type="checkbox" name="bleep" class="switch"
                     id="process-nobleep"></label>
-                <label class="toggle-row"><span><strong>Keep raw download</strong><small>Do not delete source video
-                      file</small></span><input type="checkbox" name="keepRaw" class="switch"
+                <label class="toggle-row"><span><strong>Keep raw download</strong></span><input type="checkbox" name="keepRaw" class="switch"
                     id="process-keepraw"></label>
                 <label class="field">
                   <span class="field-label">Transcription model</span>
@@ -829,8 +830,7 @@
                     <span class="status-pulse-ring" id="workflow-pulse-ring"></span>
                     <span id="workflow-3word-status" class="workflow-3word-status">Starting Pipeline Workflow...</span>
                     <span class="chip chip-warn" id="workflow-clips-counter"
-                      style="display:none; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:12px; margin-left:6px; letter-spacing:0.02em;">0/6
-                      videos done</span>
+                      style="display:none; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:12px; margin-left:6px; letter-spacing:0.02em;">0 videos done</span>
                   </div>
                   <div class="workflow-progress-actions">
                     <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-terminal-drawer"
@@ -1043,12 +1043,12 @@
                   </div>
 
                   <label class="toggle-row" style="padding:6px 0;">
-                    <span><strong>Enable Captions</strong><small>Burn animated karaoke subtitles</small></span>
+                    <span><strong>Enable Captions</strong></span>
                     <input type="checkbox" id="live-enable-captions-toggle" class="switch">
                   </label>
 
                   <label class="toggle-row" style="padding:6px 0;">
-                    <span><strong>Auto-Publish</strong><small>Push clips straight to YouTube</small></span>
+                    <span><strong>Auto-Publish</strong></span>
                     <input type="checkbox" id="live-auto-publish-toggle" class="switch">
                   </label>
 
@@ -1161,6 +1161,157 @@
         </div>
       </section>
 
+      <!-- POST-PROCESS STUDIO -->
+      <section class="view" data-view="postprocess" hidden>
+        <div class="postprocess-container">
+          <!-- Top Hero Card -->
+          <div class="card postprocess-header-card">
+            <div class="postprocess-header-content">
+              <div class="postprocess-header-icon">
+                <svg class="icon"><use href="#i-sparkles" /></svg>
+              </div>
+              <div class="postprocess-header-text">
+                <h2>Post-Process Studio</h2>
+                <p class="muted">Drag and drop any raw video clip or short to apply AI captions and profanity bleeping.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout Grid -->
+          <div class="postprocess-grid">
+            <!-- Left Card: Upload / Dropzone & Video Preview -->
+            <div class="card postprocess-card">
+              <div class="card-head">
+                <h2>1. Select Video Clip</h2>
+                <span class="chip" id="postprocess-file-status">No video loaded</span>
+              </div>
+
+              <!-- Drag & Drop Zone -->
+              <div class="postprocess-dropzone" id="postprocess-dropzone">
+                <input type="file" id="postprocess-file-input" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" style="display:none;" />
+                <div class="postprocess-dropzone-inner" id="postprocess-dropzone-prompt">
+                  <div class="postprocess-dropzone-icon">
+                    <svg class="icon"><use href="#i-cloud" /></svg>
+                  </div>
+                  <div class="postprocess-dropzone-title">Drag & drop your video here</div>
+                  <div class="postprocess-dropzone-sub muted">or click to browse from computer</div>
+                  <div class="postprocess-dropzone-hint">Supports MP4, MOV, MKV, WebM up to 2GB</div>
+                  <button type="button" class="btn btn-outline-sm" id="postprocess-browse-btn" style="margin-top:12px;">Browse Files</button>
+                </div>
+
+                <!-- Video Preview (hidden until loaded) -->
+                <div class="postprocess-preview-wrap" id="postprocess-preview-wrap" style="display:none;">
+                  <video id="postprocess-preview-video" controls playsinline preload="metadata" class="postprocess-preview-player"></video>
+                  <div class="postprocess-file-info-bar">
+                    <div class="postprocess-file-meta">
+                      <strong id="postprocess-filename">clip.mp4</strong>
+                      <span class="muted" id="postprocess-filesize">0 MB</span>
+                    </div>
+                    <button type="button" class="btn-icon-xs" id="postprocess-clear-file-btn" title="Choose different file">
+                      <svg class="icon"><use href="#i-trash" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Card: Post-Processing Options & Execution -->
+            <div class="card postprocess-card">
+              <div class="card-head">
+                <h2>2. Post-Processing Enhancements</h2>
+              </div>
+
+              <div class="postprocess-options-list">
+                <!-- Option 1: Animated Captions -->
+                <label class="postprocess-option-card" for="opt-postprocess-captions">
+                  <div class="postprocess-option-info">
+                    <div class="postprocess-option-title-row">
+                      <strong>Enable Animated Captions</strong>
+                      <span class="chip chip-accent">Whisper AI</span>
+                    </div>
+                    <p class="muted">Transcribes audio and generates synchronized word-level karaoke highlighted captions burned directly into the clip.</p>
+                  </div>
+                  <input type="checkbox" id="opt-postprocess-captions" class="switch" checked />
+                </label>
+
+                <!-- Option 2: Beep Swear Words -->
+                <label class="postprocess-option-card" for="opt-postprocess-bleep">
+                  <div class="postprocess-option-info">
+                    <div class="postprocess-option-title-row">
+                      <strong>Beep Swear Words</strong>
+                      <span class="chip chip-warn">Censor Audio</span>
+                    </div>
+                    <p class="muted">Detects profanity and replaces vulgar words with a 1000Hz censor bleep while masking subtitle text (f***).</p>
+                  </div>
+                  <input type="checkbox" id="opt-postprocess-bleep" class="switch" />
+                </label>
+              </div>
+
+              <!-- Process Button -->
+              <div class="postprocess-actions" style="margin-top:20px;">
+                <button type="button" class="btn btn-primary btn-lg" id="btn-postprocess-start" disabled style="width:100%; justify-content:center;">
+                  <svg class="icon"><use href="#i-sparkles" /></svg>
+                  <span>Start Post-Processing</span>
+                </button>
+              </div>
+
+              <!-- Live Progress Box (hidden until running) -->
+              <div class="postprocess-progress-box" id="postprocess-progress-box" style="display:none; margin-top:16px;">
+                <div class="postprocess-progress-header">
+                  <span id="postprocess-progress-status" style="font-weight:600; font-size:13px;">Processing video...</span>
+                  <span class="postprocess-spinner" id="postprocess-spinner"></span>
+                </div>
+                <div class="meter" style="margin: 10px 0;">
+                  <div class="meter-fill" id="postprocess-progress-fill" style="width: 15%; transition: width 0.3s ease;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="muted" id="postprocess-step-detail" style="font-size:12px;">Transcribing & applying filters...</span>
+                  <button type="button" class="btn-link-sm" id="postprocess-open-terminal-btn">
+                    <svg class="icon" style="width:12px; height:12px;"><use href="#i-terminal" /></svg>
+                    <span>Live Logs</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Result Card (hidden until completed) -->
+          <div class="card postprocess-result-card" id="postprocess-result-card" style="display:none; margin-top:16px;">
+            <div class="card-head">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="chip chip-success">Completed</span>
+                <h2>Post-Processed Video</h2>
+              </div>
+              <div class="postprocess-result-badges" id="postprocess-result-badges"></div>
+            </div>
+
+            <div class="postprocess-result-content">
+              <div class="postprocess-result-player-wrap">
+                <video id="postprocess-result-video" controls playsinline preload="metadata" class="postprocess-preview-player"></video>
+              </div>
+              <div class="postprocess-result-meta-box">
+                <h3 id="postprocess-result-title" style="font-size:16px; margin-bottom:8px;">Processed Clip</h3>
+                <p class="muted" id="postprocess-result-path" style="font-family:var(--font-mono); font-size:12px; word-break:break-all; margin-bottom:16px;"></p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                  <a id="postprocess-download-btn" href="#" download class="btn btn-primary">
+                    <svg class="icon"><use href="#i-film" /></svg>
+                    <span>Download Video</span>
+                  </a>
+                  <a href="#/publish" class="btn btn-outline" id="postprocess-goto-publish-btn">
+                    <svg class="icon"><use href="#i-send" /></svg>
+                    <span>View in Pending Uploads</span>
+                  </a>
+                  <button type="button" class="btn btn-ghost" id="postprocess-reset-btn">
+                    <svg class="icon"><use href="#i-refresh" /></svg>
+                    <span>Process Another</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- PUBLISH -->
       <section class="view" data-view="publish" hidden>
         <!-- Top Queue & Quota Card -->
@@ -1171,8 +1322,6 @@
                 <h2 style="font-size:15px; font-weight:600;">Pending Upload Queue</h2>
                 <span class="chip chip-warn" id="queue-count">0 ready</span>
               </div>
-              <p class="muted small" style="margin-top:2px;">Each Short is ready to publish to YouTube <strong
-                  id="publish-banner-account" style="color:var(--text-primary);">@eijishorts</strong> with 1 click.</p>
             </div>
             <div class="publish-header-right">
               <div class="quota publish-header-quota">
@@ -1210,7 +1359,7 @@
                 <span class="account-dot ok" id="account-active-dot"></span>
                 <span class="account-btn-label">
                   <span class="account-btn-prefix">Target:</span>
-                  <strong class="account-btn-name" id="account-active-name">EIJI Shorts</strong>
+                  <strong class="account-btn-name" id="account-active-name">speedshorts-yt5</strong>
                   <span class="account-btn-email muted" id="account-active-email">mhrznsuzan.alternate@gmail.com</span>
                 </span>
                 <svg class="icon custom-dropdown-arrow">
@@ -1234,7 +1383,25 @@
               </button>
               <ul class="custom-dropdown-menu" id="category-dropdown-menu" role="listbox" tabindex="-1">
                 <li class="custom-dropdown-item active" data-value="all" role="option" aria-selected="true">
-                  <span>All Categories</span>
+                  <span>All Pending (YT or IG)</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+                <li class="custom-dropdown-item" data-value="need_instagram" role="option" aria-selected="false">
+                  <span>Needs Instagram</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+                <li class="custom-dropdown-item" data-value="need_youtube" role="option" aria-selected="false">
+                  <span>Needs YouTube</span>
+                  <svg class="icon custom-dropdown-check">
+                    <use href="#i-check" />
+                  </svg>
+                </li>
+                <li class="custom-dropdown-item" data-value="all_shorts" role="option" aria-selected="false">
+                  <span>All Shorts (Inc. Published)</span>
                   <svg class="icon custom-dropdown-check">
                     <use href="#i-check" />
                   </svg>
@@ -1266,7 +1433,10 @@
               </ul>
               <!-- Hidden native select for backwards compatibility / forms -->
               <select id="publish-category-filter" class="visually-hidden" tabindex="-1" aria-hidden="true">
-                <option value="all">All Categories</option>
+                <option value="all">All Pending (YT or IG)</option>
+                <option value="need_instagram">Needs Instagram</option>
+                <option value="need_youtube">Needs YouTube</option>
+                <option value="all_shorts">All Shorts (Inc. Published)</option>
                 <option value="live">Live stream clips</option>
                 <option value="stream">Post Livestream</option>
                 <option value="longform">Longform Features</option>
@@ -1533,7 +1703,7 @@
     <div class="video-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="video-modal-title">
       <div class="modal-head">
         <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-          <span class="chip chip-warn" id="video-modal-part">Part 1/3</span>
+          <span class="chip chip-scheduled" id="video-modal-part">Viral Short</span>
           <h3 id="video-modal-title" class="truncate"
             style="font-size:15px; font-weight:600; color:var(--text-primary);">Watch Short</h3>
         </div>
@@ -1557,6 +1727,11 @@
               <use href="#i-trash" />
             </svg>Delete Short
           </button>
+          <button class="btn btn-ghost" id="video-modal-instagram-btn" title="Publish Reel to Instagram in 1 click">
+            <svg class="icon">
+              <use href="#i-instagram" />
+            </svg>Instagram
+          </button>
           <button class="btn btn-primary" id="video-modal-publish-btn">
             <svg class="icon">
               <use href="#i-youtube" />
@@ -1567,44 +1742,92 @@
     </div>
   </div>
 
-  <!-- Delete Confirmation Modal -->
+  <!-- Delete Modal with Deleting & Deleted States -->
   <div class="modal-backdrop" id="delete-modal-backdrop" hidden>
     <div class="confirm-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
-      <div class="modal-head">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div
-            style="width:32px; height:32px; border-radius:50%; background:rgba(255,0,51,0.15); color:#ff0033; display:flex; align-items:center; justify-content:center;">
+      <!-- 1. Confirmation State -->
+      <div id="delete-state-confirm" class="delete-dialog-state">
+        <div class="modal-head">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div
+              style="width:32px; height:32px; border-radius:50%; background:rgba(255,0,51,0.15); color:#ff0033; display:flex; align-items:center; justify-content:center;">
+              <svg class="icon">
+                <use href="#i-trash" />
+              </svg>
+            </div>
+            <h3 id="delete-modal-title" style="font-size:15px; font-weight:600; color:var(--text-primary);">Delete Short</h3>
+          </div>
+          <button class="icon-btn" id="delete-modal-close" aria-label="Close">
+            <svg class="icon">
+              <use href="#i-x" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body" style="padding:16px 20px;">
+          <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.5;">
+            Are you sure you want to delete <strong id="delete-modal-short-title" style="color:var(--text-primary);">this Short</strong>?
+          </p>
+          <p class="muted small" style="margin-top:8px;">
+            This will permanently remove the Short from Supabase and local storage.
+          </p>
+        </div>
+        <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
+          <button class="btn btn-ghost" id="delete-modal-cancel">Cancel</button>
+          <button class="btn btn-primary" id="delete-modal-confirm"
+            style="background:#ff0033; box-shadow:0 2px 12px rgba(255,0,51,0.4);">
             <svg class="icon">
               <use href="#i-trash" />
-            </svg>
-          </div>
-          <h3 id="delete-modal-title" style="font-size:15px; font-weight:600; color:var(--text-primary);">Delete Short
-          </h3>
+            </svg>Delete Video
+          </button>
         </div>
-        <button class="icon-btn" id="delete-modal-close" aria-label="Close">
-          <svg class="icon">
-            <use href="#i-x" />
-          </svg>
-        </button>
       </div>
-      <div class="modal-body" style="padding:16px 20px;">
-        <p style="font-size:13.5px; color:var(--text-secondary); line-height:1.5;">
-          Are you sure you want to delete <strong id="delete-modal-short-title" style="color:var(--text-primary);">this
-            Short</strong>?
-        </p>
-        <p class="muted small" style="margin-top:8px;">
-          This will permanently remove the Short from <strong>Supabase Cloud Storage</strong>, database records, and
-          local disk. You won't have to delete it manually in Supabase.
-        </p>
+
+      <!-- 2. Deleting State -->
+      <div id="delete-state-loading" class="delete-dialog-state" style="display:none; padding:32px 24px; text-align:center;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+          <div style="position:relative; width:56px; height:56px; display:flex; align-items:center; justify-content:center;">
+            <div class="delete-spinner-ring"></div>
+            <div style="position:absolute; width:24px; height:24px; color:#ff0033; display:flex; align-items:center; justify-content:center;">
+              <svg class="icon" style="width:20px; height:20px;"><use href="#i-trash"/></svg>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin:0;">Deleting Video...</h3>
+            <p id="delete-loading-title" class="truncate" style="max-width:340px; font-size:13px; color:var(--text-secondary); margin:0;">Purging from cloud storage &amp; database...</p>
+          </div>
+        </div>
       </div>
-      <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
-        <button class="btn btn-ghost" id="delete-modal-cancel">Cancel</button>
-        <button class="btn btn-primary" id="delete-modal-confirm"
-          style="background:#ff0033; box-shadow:0 2px 12px rgba(255,0,51,0.4);">
-          <svg class="icon">
-            <use href="#i-trash" />
-          </svg>Delete from Supabase
-        </button>
+
+      <!-- 3. Deleted State -->
+      <div id="delete-state-success" class="delete-dialog-state" style="display:none; padding:32px 24px; text-align:center;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+          <div class="delete-success-badge">
+            <svg class="icon" style="width:28px; height:28px;"><use href="#i-check"/></svg>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin:0;">Deleted Successfully</h3>
+            <p id="delete-success-title" class="truncate" style="max-width:340px; font-size:13px; color:var(--text-secondary); margin:0;">The video has been permanently deleted.</p>
+          </div>
+          <button type="button" class="btn btn-ghost" id="delete-modal-done" style="margin-top:4px; min-width:110px;">
+            Done
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. Error State -->
+      <div id="delete-state-error" class="delete-dialog-state" style="display:none; padding:28px 20px; text-align:center;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:14px;">
+          <div style="width:52px; height:52px; border-radius:50%; background:rgba(255,78,69,0.15); color:#ff4e45; display:flex; align-items:center; justify-content:center;">
+            <svg class="icon" style="width:24px; height:24px;"><use href="#i-alert"/></svg>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:600; color:var(--text-primary); margin:0;">Delete Failed</h3>
+            <p id="delete-error-message" class="muted small" style="margin-top:6px; max-width:340px;">An error occurred while deleting.</p>
+          </div>
+          <button type="button" class="btn btn-ghost" id="delete-modal-error-close" style="margin-top:4px; min-width:100px;">
+            Close
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1622,10 +1845,8 @@
             </svg>
           </div>
           <div>
-            <h3 id="account-publish-modal-title" style="font-size:15px; font-weight:600; color:var(--text-primary);">
+            <h3 id="account-publish-modal-title" style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0;">
               Publish to YouTube</h3>
-            <p class="muted small" id="account-publish-modal-sub" style="margin-top:2px;">Select which channel to upload
-              to</p>
           </div>
         </div>
         <button class="icon-btn" id="account-publish-modal-close" aria-label="Close modal">
@@ -1639,10 +1860,13 @@
           <!-- LEFT COLUMN: Selected Short, Beautified Account Selector & Guarantees -->
           <div class="account-publish-col-left">
             <div class="account-publish-short-info">
-              <span class="account-publish-subhead">Selected Short</span>
-              <div class="account-publish-title-wrap">
-                <svg class="icon"><use href="#i-video"/></svg>
-                <strong id="account-publish-short-title" class="account-publish-title">this Short</strong>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span class="account-publish-subhead" style="margin:0;">YouTube Video Title</span>
+                <span class="muted small" id="account-publish-title-count" style="font-size:11px;">0 / 100</span>
+              </div>
+              <div class="account-publish-title-wrap" style="position:relative;">
+                <input type="text" id="account-publish-title-input" class="input" maxlength="100" style="padding-left:12px; font-weight:600; font-size:13px; width:100%; border-radius:var(--radius-sm);" placeholder="Enter video title...">
+                <strong id="account-publish-short-title" style="display:none;">this Short</strong>
               </div>
             </div>
 
@@ -1657,8 +1881,8 @@
                       <svg class="icon"><use href="#i-youtube"/></svg>
                     </div>
                     <div class="account-modal-info">
-                      <div class="account-modal-name" id="account-modal-selected-name">EIJI Shorts</div>
-                      <div class="account-modal-handle" id="account-modal-selected-handle">@eijishorts</div>
+                      <div class="account-modal-name" id="account-modal-selected-name">speedshorts-yt5</div>
+                      <div class="account-modal-handle" id="account-modal-selected-handle">@speedshorts-yt5</div>
                     </div>
                   </div>
                   <div class="account-modal-btn-right">
@@ -1723,7 +1947,6 @@
                 </div>
                 <div>
                   <strong>Instant Public Release</strong>
-                  <p class="muted small" style="margin-top:2px;">Video will be uploaded directly to YouTube and immediately set to <strong>Public</strong>.</p>
                 </div>
               </div>
 
@@ -1841,8 +2064,6 @@
           </div>
           <div>
             <h3 id="auto-scheduler-title" style="margin:0; font-size:16px;">Autonomous Peak-Hour Scheduler</h3>
-            <p class="muted small" style="margin:0;">100% Offline Cloud Pre-Upload &bull; Human-like Organic Viewership
-              Timing</p>
           </div>
         </div>
         <button class="icon-btn" id="auto-scheduler-close" aria-label="Close modal">
@@ -1862,10 +2083,7 @@
           <div>
             <strong style="color:var(--text-primary);">100% Offline Release Guarantee</strong>
             <div style="margin-top:2px; font-size:12px; color:var(--text-secondary);">
-              Videos are pre-uploaded directly into YouTube's cloud as <em>Private</em> with <code
-                style="color:var(--text-primary); background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px;">publishAt</code>
-              set. YouTube servers automatically release each Short as <strong>Public</strong> at the exact scheduled
-              second, even if your PC is turned off, asleep, or offline.
+              Direct cloud pre-upload. Automatically releases even when your PC is offline.
             </div>
           </div>
         </div>
@@ -1899,8 +2117,8 @@
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="account-dot ok"></span>
             <div>
-              <div style="font-size:13px; font-weight:600;" id="auto-sched-account-name">Target: EIJI Shorts
-                (@eijishorts)</div>
+              <div style="font-size:13px; font-weight:600;" id="auto-sched-account-name">Target: speedshorts-yt5
+                (@speedshorts-yt5)</div>
               <div class="muted small" id="auto-sched-quota-summary">Daily Uploads: Checking status...</div>
             </div>
           </div>
@@ -1939,6 +2157,85 @@
     </div>
   </div>
 
+  <!-- 1-Click Instagram Reels Publisher Modal -->
+  <div class="modal-backdrop" id="instagram-publish-modal-backdrop" hidden>
+    <div class="account-select-dialog instagram-publish-dialog" role="dialog" aria-modal="true" aria-labelledby="instagram-publish-title">
+      <div class="modal-head">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="account-option-avatar" style="width:36px; height:36px; background:linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045); color:#fff; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+            <svg class="icon"><use href="#i-instagram" /></svg>
+          </div>
+          <div>
+            <h3 id="instagram-publish-title" style="margin:0; font-size:16px;">Publish Instagram Reel</h3>
+            <div class="muted small">1-Click direct reel publication to Instagram</div>
+          </div>
+        </div>
+        <button class="icon-btn" id="instagram-publish-close" aria-label="Close modal">
+          <svg class="icon"><use href="#i-x" /></svg>
+        </button>
+      </div>
+
+      <div class="modal-body" style="padding:16px 20px; display:flex; flex-direction:column; gap:14px;">
+        <!-- Destination Profile Banner -->
+        <div class="instagram-profile-banner">
+          <div class="instagram-profile-left">
+            <div class="instagram-profile-avatar" id="instagram-profile-avatar">
+              <svg class="icon"><use href="#i-instagram" /></svg>
+            </div>
+            <div>
+              <div class="instagram-profile-name" id="instagram-profile-name">SIcreator</div>
+              <div class="instagram-profile-handle" id="instagram-profile-handle">@sicre.ator</div>
+            </div>
+          </div>
+          <span class="chip chip-ok" id="instagram-profile-badge">
+            <span class="status-dot ok"></span>Connected
+          </span>
+        </div>
+
+        <!-- Video Selection Card -->
+        <div class="instagram-short-preview">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label class="field-label" style="font-size:12px; margin:0;" for="instagram-title-input">Reels / Video Title</label>
+            <span class="muted small" id="instagram-title-count" style="font-size:11px;">0 / 100</span>
+          </div>
+          <input type="text" id="instagram-title-input" class="input" maxlength="100" style="font-size:13px; font-weight:600; padding:8px 12px; margin-bottom:8px;" placeholder="Edit video title...">
+          <div class="instagram-short-title" id="instagram-short-title" style="display:none;">Loading Short...</div>
+          <div class="instagram-short-meta">
+            <span class="chip-part-badge" id="instagram-short-part" style="display:none;"></span>
+            <span class="chip-score-badge" id="instagram-short-duration">0:45</span>
+            <span class="chip" id="instagram-short-source">Standard</span>
+          </div>
+        </div>
+
+        <!-- Caption Box -->
+        <div class="field" style="margin:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label class="field-label" style="font-size:12px; margin:0;" for="instagram-caption-input">Reels Caption &amp; Hashtags</label>
+            <span class="muted small" id="instagram-char-count" style="font-size:11px;">0 / 2200</span>
+          </div>
+          <textarea id="instagram-caption-input" class="input" rows="4" style="resize:vertical; font-size:13px; font-family:inherit; padding:10px 12px; line-height:1.4;" placeholder="Add caption and hashtags..."></textarea>
+        </div>
+
+        <!-- Notice -->
+        <div class="schedule-offline-note" style="border-color:rgba(255, 255, 255, 0.08); background:rgba(255, 255, 255, 0.03);">
+          <svg class="icon" style="color:var(--accent-light); width:18px; height:18px; flex-shrink:0;">
+            <use href="#i-shield" />
+          </svg>
+          <div style="font-size:12px; color:var(--text-secondary);">
+            Published immediately to Instagram via official Meta Graph API v19.0.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-ghost" id="instagram-publish-cancel">Cancel</button>
+        <button class="btn btn-primary" id="instagram-publish-confirm">
+          <svg class="icon"><use href="#i-send" /></svg><span id="instagram-publish-confirm-text">Publish Reel Now</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Slide-In Terminal Drawer (Pop-in & Pop-out) -->
   <div class="terminal-drawer-scrim" id="terminal-drawer-scrim"></div>
   <aside class="terminal-drawer" id="terminal-drawer" aria-label="Pipeline Live Terminal">
@@ -1954,7 +2251,6 @@
             <h3 id="terminal-drawer-title">Pipeline Terminal</h3>
             <span class="chip chip-sm" id="terminal-drawer-chip">idle</span>
           </div>
-          <p id="terminal-drawer-subtitle" class="muted small">Live stdout stream from pipeline runner</p>
         </div>
       </div>
       <div class="terminal-drawer-controls">
@@ -1982,7 +2278,7 @@
         <span class="status-pulse-ring" id="terminal-drawer-pulse-ring"></span>
         <span id="terminal-drawer-3words">Ingesting Video Audio...</span>
         <span class="chip chip-warn chip-sm" id="terminal-drawer-clips-counter"
-          style="display:none; font-weight:700; margin-left:6px;">0/6 videos done</span>
+          style="display:none; font-weight:700; margin-left:6px;">0 videos done</span>
       </div>
       <span id="terminal-drawer-pct" class="terminal-drawer-pct">14%</span>
     </div>
@@ -1998,7 +2294,7 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="/app.js?v=71"></script>
+  <script src="/app.js?v=82"></script>
 </body>
 
 </html>

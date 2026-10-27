@@ -262,7 +262,7 @@ def auto_schedule_batch(
         dur = cand.get("duration") or 0.0
         
         console.print(
-            f"[bold yellow]#{idx}[/bold yellow] [bold white]Short #{c_id}[/bold white] (Part {part}, {dur:.1f}s): "
+            f"[bold yellow]#{idx}[/bold yellow] [bold white]Short #{c_id}[/bold white] ({dur:.1f}s): "
             f"[dim]'{title[:38]}...'[/dim]\n"
             f"   [cyan][RELEASE][/cyan] [bold cyan]{slot['day_rel']}[/bold cyan] -> [bold green]{slot['local_formatted']}[/bold green] "
             f"[dim]({slot['window_name']})[/dim]\n"

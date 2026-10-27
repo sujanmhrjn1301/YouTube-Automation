@@ -1,6 +1,6 @@
 """
 Standalone single-item uploader for Shorts Studio Dashboard.
-Uploads a specific Short by its database ID to YouTube (@eijishorts),
+Uploads a specific Short by its database ID to YouTube (@speedshorts-yt5),
 marks it as uploaded in Supabase and SQLite, and prints clean progress.
 
 Usage:
@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -40,9 +41,10 @@ from src.console import (
 from src.models import ViralClip
 from src.services.database import DatabaseService
 from src.services.youtube_uploader import YouTubeUploaderService
+from src.utils import clean_standalone_short_title
 
 
-def upload_single_short(short_id: int, publish_at: Optional[str] = None) -> bool:
+def upload_single_short(short_id: int, publish_at: Optional[str] = None, custom_title: Optional[str] = None) -> bool:
     print_banner()
     schedule_text = f" (Scheduled: {publish_at})" if publish_at else ""
     log_stage(6, "Targeted Uploader", f"Publishing Short #{short_id} to YouTube{schedule_text}")
@@ -91,8 +93,9 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None) -> bool
     source_vid = item.get("source_video_id") or "video"
     part_num = item.get("part_number") or 1
     total_parts = item.get("total_parts") or 1
-    title = item.get("hook_title") or f"Short Part {part_num}"
-    part_str = f"Part {part_num}/{total_parts}" if total_parts > 1 else "Short"
+    raw_title = custom_title.strip() if (custom_title and custom_title.strip()) else (item.get("hook_title") or f"Short #{short_id}")
+    title = clean_standalone_short_title(raw_title, fallback_label=f"Viral Short #{short_id}")
+    part_str = "Short"
 
     log_info("UPLOADER", f"Preparing: [bold yellow]{part_str}[/bold yellow] - [bold white]{title}[/bold white]")
 
@@ -108,21 +111,25 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None) -> bool
 
     # FALLBACK: Local Disk
     if not video_file_path or not Path(video_file_path).exists() or Path(video_file_path).stat().st_size <= 1024:
-        loc_path = item.get("local_path")
-        if loc_path and Path(loc_path).exists() and Path(loc_path).stat().st_size > 1024:
-            video_file_path = str(loc_path)
+        found_local = db_service.find_local_video(item)
+        if found_local and found_local.is_file() and found_local.stat().st_size > 1024:
+            video_file_path = str(found_local)
             log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Using local disk file: {video_file_path}")
         else:
-            import re
-            clean_title = re.sub(r'[^a-zA-Z0-9]', '', title.lower().replace("shorts", ""))
-            for f in settings.OUTPUT_DIR.glob("*.mp4"):
-                f_name_lower = f.name.lower()
-                f_stem_clean = re.sub(r'[^a-zA-Z0-9]', '', f.stem.lower())
-                if (source_vid and source_vid.lower() in f_name_lower and f"part{part_num}" in f_name_lower) or \
-                   (clean_title and len(clean_title) >= 10 and clean_title[:15] in f_stem_clean):
-                    video_file_path = str(f)
-                    log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Found matching video file in output: {video_file_path}")
-                    break
+            loc_path = item.get("local_path")
+            if loc_path and Path(loc_path).exists() and Path(loc_path).stat().st_size > 1024:
+                video_file_path = str(loc_path)
+                log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Using local disk file: {video_file_path}")
+            else:
+                clean_title = re.sub(r'[^a-zA-Z0-9]', '', title.lower().replace("shorts", ""))
+                for f in settings.OUTPUT_DIR.glob("*.mp4"):
+                    f_name_lower = f.name.lower()
+                    f_stem_clean = re.sub(r'[^a-zA-Z0-9]', '', f.stem.lower())
+                    if (source_vid and source_vid.lower() in f_name_lower and f"part{part_num}" in f_name_lower) or \
+                       (clean_title and len(clean_title) >= 10 and clean_title[:15] in f_stem_clean):
+                        video_file_path = str(f)
+                        log_info("UPLOADER", f"💾 [LOCAL FALLBACK] Found matching video file in output: {video_file_path}")
+                        break
 
     if not video_file_path or not Path(video_file_path).exists():
         log_error("UPLOADER", f"No video file found on cloud storage or local disk for Short #{short_id}.")
@@ -195,7 +202,6 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None) -> bool
                     db_service.client.table("shorts_metadata").update(update_payload).eq("id", short_id).execute()
             except Exception:
                 pass
-        db_service.record_quota_usage(units=1600, is_upload=True)
         if publish_at:
             log_success("UPLOADER", f"[OK] Successfully scheduled Short #{short_id} on YouTube! Scheduled for release: {publish_at}")
         else:
@@ -210,9 +216,10 @@ def main():
     parser = argparse.ArgumentParser(description="Upload single Short by ID")
     parser.add_argument("--id", type=int, required=True, help="Database ID of the short to upload")
     parser.add_argument("--publish-at", type=str, default=None, help="Scheduled release date/time in ISO-8601 format")
+    parser.add_argument("--title", type=str, default="", help="Custom YouTube title")
     args = parser.parse_args()
 
-    success = upload_single_short(args.id, publish_at=args.publish_at)
+    success = upload_single_short(args.id, publish_at=args.publish_at, custom_title=args.title)
     sys.exit(0 if success else 1)
 
 

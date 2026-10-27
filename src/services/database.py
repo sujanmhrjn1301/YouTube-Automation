@@ -330,7 +330,17 @@ class DatabaseService:
                 safe_parts.append(p_clean)
             remote_filename = "/".join(safe_parts)
 
-        log_info("DATABASE", f"Uploading {path_obj.name} to Supabase bucket '{target_bucket}/{remote_filename}'...")
+        # Check against Supabase Free Tier limit (~50MB per file)
+        file_size_mb = path_obj.stat().st_size / (1024 * 1024)
+        if file_size_mb > 48.0:
+            log_info(
+                "DATABASE",
+                f"File '{path_obj.name}' ({file_size_mb:.1f} MB) exceeds Supabase Free Tier limit (50 MB). "
+                f"Preserving video safely on local disk for direct YouTube publishing."
+            )
+            return None
+
+        log_info("DATABASE", f"Uploading {path_obj.name} ({file_size_mb:.1f} MB) to Supabase bucket '{target_bucket}/{remote_filename}'...")
 
         try:
             with open(path_obj, "rb") as f:
@@ -743,7 +753,6 @@ class DatabaseService:
         Prioritizes items that have an existing file ready on disk or valid storage URL.
         """
         from pathlib import Path
-        import re
 
         pending_list: List[Dict[str, Any]] = []
         seen_keys = set()
@@ -885,19 +894,33 @@ class DatabaseService:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            try:
-                cursor.execute("""
-                    UPDATE shorts_metadata
-                    SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?, scheduled_publish_at = ?
-                    WHERE id = ? OR (source_video_id = ? AND part_number = ?)
-                """, (youtube_id, now_iso, scheduled_at, record_id, source_video_id, part_number))
-            except Exception:
-                cursor.execute("""
-                    UPDATE shorts_metadata
-                    SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?
-                    WHERE id = ? OR (source_video_id = ? AND part_number = ?)
-                """, (youtube_id, now_iso, record_id, source_video_id, part_number))
-            if cursor.rowcount == 0:
+            if record_id:
+                try:
+                    cursor.execute("""
+                        UPDATE shorts_metadata
+                        SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?, scheduled_publish_at = ?
+                        WHERE id = ?
+                    """, (youtube_id, now_iso, scheduled_at, record_id))
+                except Exception:
+                    cursor.execute("""
+                        UPDATE shorts_metadata
+                        SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?
+                        WHERE id = ?
+                    """, (youtube_id, now_iso, record_id))
+            else:
+                try:
+                    cursor.execute("""
+                        UPDATE shorts_metadata
+                        SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?, scheduled_publish_at = ?
+                        WHERE source_video_id = ? AND part_number = ?
+                    """, (youtube_id, now_iso, scheduled_at, source_video_id, part_number))
+                except Exception:
+                    cursor.execute("""
+                        UPDATE shorts_metadata
+                        SET youtube_id = ?, is_confirmed_uploaded = 1, confirmed_at = ?
+                        WHERE source_video_id = ? AND part_number = ?
+                    """, (youtube_id, now_iso, source_video_id, part_number))
+            if cursor.rowcount == 0 and record_id:
                 s_url = f"https://www.youtube.com/watch?v={source_video_id}" if source_video_id else ""
                 try:
                     cursor.execute("""
@@ -928,13 +951,102 @@ class DatabaseService:
                     "confirmed_at": now_iso,
                 }
                 if scheduled_at:
-                    try:
-                        self.client.table("shorts_metadata").update({**payload, "scheduled_publish_at": scheduled_at}).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
-                    except Exception:
-                        self.client.table("shorts_metadata").update(payload).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
-                else:
+                    payload["scheduled_publish_at"] = scheduled_at
+
+                if record_id:
+                    self.client.table("shorts_metadata").update(payload).eq("id", record_id).execute()
+                elif source_video_id:
                     self.client.table("shorts_metadata").update(payload).eq("source_video_id", source_video_id).eq("part_number", part_number).execute()
             except Exception as e:
                 log_warning("DATABASE", f"Supabase mark uploaded note: {e}")
+
+    def find_local_video(self, record: Dict[str, Any]) -> Optional[Path]:
+        """
+        Locates the corresponding MP4 video file on local disk for any database or Supabase record.
+        Supports longform narrative features, postprocessed clips, and standard/livestream clips.
+        Checks local_path, output/shorts_metadata.json, output/longform_videos,
+        output/temp_uploads, output/montages, output/clips, and output root.
+        """
+        # 1. Direct local_path if specified and exists
+        lp = record.get("local_path")
+        if lp and Path(lp).is_file():
+            return Path(lp)
+
+        # 2. Check output/shorts_metadata.json
+        meta_json = self.json_history_path
+        if meta_json.is_file():
+            try:
+                with open(meta_json, "r", encoding="utf-8") as f:
+                    arr = json.load(f)
+                for item in arr:
+                    if (
+                        item.get("source_title") == record.get("source_title")
+                        or item.get("hook_title") == record.get("hook_title")
+                        or (item.get("created_at") and item.get("created_at") == record.get("created_at"))
+                    ):
+                        cand = item.get("local_path")
+                        if cand and Path(cand).is_file():
+                            return Path(cand)
+            except Exception:
+                pass
+
+        src_vid = str(record.get("source_video_id") or "").lower()
+        hook_t = str(record.get("hook_title") or "").lower()
+        src_t = str(record.get("source_title") or "").lower()
+        duration = float(record.get("duration") or 0.0)
+
+        # 3. Longform features (duration > 180s, source_video_id == 'feature', or keywords)
+        if src_vid == "feature" or "full story" in hook_t or "longform" in hook_t or duration > 180:
+            longform_dir = settings.OUTPUT_DIR / "longform_videos"
+            if longform_dir.is_dir():
+                clean_words = set(re.findall(r"[a-z0-9]+", (src_t + " " + hook_t).lower()))
+                clean_words.discard("full")
+                clean_words.discard("story")
+                clean_words.discard("the")
+                clean_words.discard("video")
+                best_match = None
+                best_score = 0
+                for f in longform_dir.glob("*.mp4"):
+                    f_words = set(re.findall(r"[a-z0-9]+", f.stem.lower()))
+                    common = clean_words.intersection(f_words)
+                    if len(common) > best_score:
+                        best_score = len(common)
+                        best_match = f
+                if best_match and best_score >= 2:
+                    return best_match
+                feats = [f for f in longform_dir.glob("Feature_*.mp4") if f.stat().st_size > 1000]
+                if feats:
+                    feats.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                    return feats[0]
+
+        # 4. Check matching keywords in output/ and subdirectories
+        clean_words = set(re.findall(r"[a-z0-9]+", (src_t + " " + hook_t).lower()))
+        clean_words.discard("shorts")
+        clean_words.discard("viral")
+        clean_words.discard("video")
+        for check_dir in [
+            settings.OUTPUT_DIR,
+            settings.OUTPUT_DIR / "temp_uploads",
+            settings.OUTPUT_DIR / "montages",
+            settings.OUTPUT_DIR / "clips",
+        ]:
+            if not check_dir.is_dir():
+                continue
+            for f in check_dir.glob("*.mp4"):
+                if f.stat().st_size < 1000:
+                    continue
+                f_words = set(re.findall(r"[a-z0-9]+", f.stem.lower()))
+                common = clean_words.intersection(f_words)
+                if len(common) >= 2 or (src_vid and src_vid in f.stem.lower()):
+                    return f
+
+        # 5. Fallback for postprocess uploads / clips in temp_uploads
+        temp_ups = [f for f in (settings.OUTPUT_DIR / "temp_uploads").glob("*.mp4") if f.stat().st_size > 1000]
+        if temp_ups:
+            temp_ups.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            return temp_ups[0]
+
+        return None
+
 
 

@@ -24,15 +24,16 @@
   };
 
   const VIEW_TITLES = {
-    overview: { title: 'Overview', sub: 'Your pipeline at a glance.' },
-    create: { title: 'Create Shorts', sub: 'Extract vertical clips with AI moment detection.' },
-    live: { title: 'Live Agent', sub: 'Continuously watch a live stream and clip viral moments.' },
-    publish: { title: 'Pending Uploads', sub: 'Review pending Shorts and publish them to YouTube.' },
-    scheduled: { title: 'Scheduled Releases', sub: 'Shorts pre-uploaded to YouTube cloud servers and queued for automatic offline release.' },
-    library: { title: 'Library', sub: 'Browse and inspect all generated Shorts and metadata.' },
-    supabase: { title: 'Supabase Database', sub: 'Direct visual access to your PostgreSQL tables and cloud storage buckets.' },
-    activity: { title: 'Activity', sub: 'Execution history, logs, and process states.' },
-    system: { title: 'System', sub: 'Health checks, credentials, and disk cache maintenance.' },
+    overview: { title: 'Overview', sub: '' },
+    create: { title: 'Create Shorts', sub: '' },
+    live: { title: 'Live Agent', sub: '' },
+    postprocess: { title: 'Post-Process Studio', sub: 'Drag and drop videos to add captions & censor swear words' },
+    publish: { title: 'Pending Uploads', sub: '' },
+    scheduled: { title: 'Scheduled Releases', sub: '' },
+    library: { title: 'Library', sub: '' },
+    supabase: { title: 'Supabase Database', sub: '' },
+    activity: { title: 'Activity', sub: '' },
+    system: { title: 'System', sub: '' },
   };
 
   // DOM Elements
@@ -133,6 +134,7 @@
       });
     }
     if (viewName === 'live') refreshLiveAgentView();
+    if (viewName === 'postprocess') initPostprocessView();
     if (viewName === 'library') refreshLibrary();
     if (viewName === 'scheduled') refreshScheduledView();
     if (viewName === 'supabase') refreshSupabase();
@@ -270,8 +272,8 @@
     }
     if (qMetaText) {
       qMetaText.textContent = targetMet
-        ? `${uploadsToday} uploads completed today · Target baseline of ${minGoal} met · Unlimited allowed · Resets daily at midnight`
-        : `${uploadsToday} of ${minGoal} uploads completed today (${minGoal - uploadsToday} to target) · Resets daily at midnight`;
+        ? `Daily target met · Resets at midnight`
+        : `${uploadsToday} of ${minGoal} completed (${minGoal - uploadsToday} left) · Resets at midnight`;
     }
 
     // Secondary quota on publish view
@@ -279,9 +281,9 @@
     const q2Fill = document.getElementById('q2-fill');
     if (q2Left) {
       if (targetMet) {
-        q2Left.innerHTML = `<span style="color:#10b981; font-weight:600;">${uploadsToday} uploaded today</span> · Target met`;
+        q2Left.innerHTML = `<span style="color:#10b981; font-weight:600;">${uploadsToday} uploaded</span>`;
       } else {
-        q2Left.innerHTML = `<span>${uploadsToday}/${minGoal} uploaded</span> · <span class="muted">${minGoal - uploadsToday} to target</span>`;
+        q2Left.innerHTML = `<span>${uploadsToday}/${minGoal} uploaded</span>`;
       }
     }
     if (q2Fill) {
@@ -409,6 +411,9 @@
                 <svg class="icon"><use href="#i-copy"/></svg>CDN Link
               </button>
             ` : ''}
+            <button type="button" class="lib-delete-btn" data-lib-delete-filename="${escapeHtml(v.filename)}" data-lib-delete-title="${escapeHtml(v.title || v.filename)}" title="Delete from Supabase & Storage">
+              <svg class="icon"><use href="#i-trash"/></svg>
+            </button>
             <svg class="icon chev"><use href="#i-chevron"/></svg>
           </div>
         </li>
@@ -477,6 +482,9 @@
           </div>
           <div class="row-actions">
             ${statusChip}
+            <button type="button" class="lib-delete-btn" data-lib-delete-id="${item.id}" data-lib-delete-title="${escapeHtml(item.title)}" title="Delete from Supabase & Database">
+              <svg class="icon"><use href="#i-trash"/></svg>
+            </button>
             <svg class="icon chev"><use href="#i-chevron"/></svg>
           </div>
         </li>
@@ -758,8 +766,25 @@
     });
   }
 
-  // Row click delegation to open Drawer or play Edited Videos
+  // Row click delegation to open Drawer or play Edited Videos or Delete
   document.addEventListener('click', (e) => {
+    const delBtn = e.target.closest('.lib-delete-btn');
+    if (delBtn) {
+      e.stopPropagation();
+      const delId = delBtn.dataset.libDeleteId ? parseInt(delBtn.dataset.libDeleteId, 10) : 0;
+      const delFname = delBtn.dataset.libDeleteFilename || '';
+      let targetItem = null;
+      if (delId) {
+        targetItem = (state.library || []).find(x => x.id === delId) || { id: delId, title: delBtn.dataset.libDeleteTitle };
+      } else if (delFname) {
+        targetItem = (state.editedVideos || []).find(x => x.filename === delFname) || { filename: delFname, title: delBtn.dataset.libDeleteTitle };
+      }
+      if (targetItem) {
+        openDeleteModal(targetItem);
+      }
+      return;
+    }
+
     const playBtn = e.target.closest('[data-play-edited]');
     const editedLi = e.target.closest('.rows li[data-edited-filename]');
     if (playBtn || editedLi) {
@@ -852,6 +877,28 @@
         </div>
       `;
     }
+ 
+    let igHtml = '';
+    if (item.instagramUrl) {
+      igHtml = `
+        <div class="detail-section">
+          <label>Instagram Reels Link</label>
+          <a href="${escapeHtml(item.instagramUrl)}" target="_blank" class="btn btn-ghost" style="align-self:flex-start;">
+            <svg class="icon"><use href="#i-instagram"/></svg>View on Instagram (@sicre.ator)
+          </a>
+        </div>
+      `;
+    } else {
+      igHtml = `
+        <div class="detail-section">
+          <label>Instagram Status</label>
+          <p class="muted" style="margin-bottom:8px;">Not yet published on Instagram Reels.</p>
+          <button type="button" class="btn btn-ghost" id="drawer-instagram-btn" style="align-self:flex-start;">
+            <svg class="icon"><use href="#i-instagram"/></svg>Publish to Instagram
+          </button>
+        </div>
+      `;
+    }
 
     let videoSrc = item.videoUrl || item.storageUrl || `/api/video?id=${item.id}`;
     let videoPlayerHtml = `
@@ -900,6 +947,7 @@
 
       ${storageHtml}
       ${ytHtml}
+      ${igHtml}
 
       <div class="detail-section" style="margin-top:10px; padding-top:14px; border-top:1px solid var(--border-subtle);">
         <button class="btn btn-ghost" id="drawer-delete-btn" style="color:#ff4d4f; align-self:flex-start;">
@@ -913,6 +961,14 @@
       drawerPub.addEventListener('click', () => {
         closeDrawer();
         openPublishAccountModal(item.id, item.title);
+      });
+    }
+
+    const drawerIg = document.getElementById('drawer-instagram-btn');
+    if (drawerIg) {
+      drawerIg.addEventListener('click', () => {
+        closeDrawer();
+        openInstagramModal(item);
       });
     }
 
@@ -1049,7 +1105,7 @@
                   <td><strong>${escapeHtml(r.hook_title || 'Untitled')}</strong></td>
                   <td style="font-family:var(--font-mono);">${formatDuration(r.duration)}</td>
                   <td>${r.hook_score ? `<span class="chip chip-ok">${r.hook_score}/10</span>` : '–'}</td>
-                  <td>Part ${r.part_number || 1}/${r.total_parts || 1}</td>
+                  <td>${(r.total_parts && r.total_parts > 1) ? `Part ${r.part_number}/${r.total_parts}` : 'Short'}</td>
                   <td>${r.youtube_id || r.is_confirmed_uploaded ? '<span class="chip chip-ok">Uploaded</span>' : '<span class="chip chip-warn">Pending</span>'}</td>
                   <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted);">${r.storage_url ? `<a href="${escapeHtml(r.storage_url)}" target="_blank" class="link-btn" onclick="event.stopPropagation();">Open video</a>` : '–'}</td>
                   <td style="font-size:11px; color:var(--text-muted);">${escapeHtml((r.created_at || '').substring(0, 16).replace('T', ' '))}</td>
@@ -1080,7 +1136,7 @@
               ${rows.map(r => `
                 <tr data-sb-row="${r.id}" title="Click to view full record">
                   <td style="font-family:var(--font-mono); color:var(--text-faint);">${r.id}</td>
-                  <td><span class="chip chip-quiet">Part ${r.part_number}/${r.total_parts}</span></td>
+                  <td><span class="chip chip-quiet">${(r.total_parts && r.total_parts > 1) ? `Part ${r.part_number}/${r.total_parts}` : 'Short'}</span></td>
                   <td><strong>${escapeHtml(r.short_title || '')}</strong></td>
                   <td style="color:var(--text-muted);">${escapeHtml(r.source_title || '')}</td>
                   <td style="font-family:var(--font-mono);">${formatDuration(r.duration)}</td>
@@ -1342,23 +1398,197 @@
   // ─────────────────────────────────────────────────────────────
   // Publish Queue View (4x3 Card Grid & One-Click Publish)
   // ─────────────────────────────────────────────────────────────
+  function isShortYtDone(item) {
+    if (!item) return false;
+    return Boolean(item.youtubeUploaded || item.uploaded || item.youtubeId);
+  }
+
+  function isShortIgDone(item) {
+    if (!item) return false;
+    return Boolean(item.instagramUploaded || item.instagramId || item.instagramUrl);
+  }
+
+  function isShortPending(item) {
+    if (!item) return false;
+    // Longform feature videos (>180s or source==='longform') are for YouTube only (exceeds Instagram 90s Reels limit)
+    if (item.source === 'longform' || (item.duration && item.duration > 180)) {
+      return !isShortYtDone(item);
+    }
+    // Standard clips are pending if EITHER YouTube OR Instagram is not yet published!
+    return !isShortYtDone(item) || !isShortIgDone(item);
+  }
+
+  function renderCardActions(item) {
+    const ytUp = state.activeUploads && state.activeUploads[item.id];
+    const igUp = state.activeInstagramUploads && state.activeInstagramUploads[item.id];
+    const isYtDone = isShortYtDone(item);
+    const isIgDone = isShortIgDone(item);
+    const isLongform = item.source === 'longform' || (item.duration && item.duration > 180);
+
+    const renderYtProgress = (up) => {
+      const isSuccess = up.status === 'success';
+      const isError = up.status === 'error';
+      const cls = isSuccess ? 'publish-card-progress success' : (isError ? 'publish-card-progress error' : 'publish-card-progress');
+      const spinnerCls = isSuccess ? 'card-progress-spinner done' : (isError ? 'card-progress-spinner fail' : 'card-progress-spinner');
+      const spinnerText = isSuccess ? '✓' : (isError ? '✗' : '');
+      return `
+        <div class="${cls}" id="card-progress-${item.id}">
+          <div class="card-progress-top">
+            <div class="card-progress-status">
+              <span class="${spinnerCls}" id="card-spinner-${item.id}">${spinnerText}</span>
+              <span class="card-progress-text" id="card-text-${item.id}">${escapeHtml(up.text || 'Uploading to YouTube...')}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="card-progress-num" id="card-num-${item.id}">${up.percent || 15}%</span>
+              <button type="button" class="btn-card-terminal" onclick="window.shortsAppOpenUploadTerminal(${item.id})" title="Inspect live upload in Terminal Drawer">
+                <svg class="icon"><use href="#i-terminal"/></svg>
+                <span>Terminal</span>
+              </button>
+            </div>
+          </div>
+          <div class="card-progress-track">
+            <div class="card-progress-fill" id="card-fill-${item.id}" style="width: ${up.percent || 15}%;"></div>
+          </div>
+        </div>
+      `;
+    };
+
+    const renderIgProgress = (up) => {
+      const isSuccess = up.status === 'success';
+      const isError = up.status === 'error';
+      const cls = isSuccess ? 'publish-card-progress success' : (isError ? 'publish-card-progress error' : 'publish-card-progress');
+      const spinnerCls = isSuccess ? 'card-progress-spinner done' : (isError ? 'card-progress-spinner fail' : 'card-progress-spinner');
+      const spinnerText = isSuccess ? '✓' : (isError ? '✗' : '');
+      return `
+        <div class="${cls}" id="card-progress-ig-${item.id}">
+          <div class="card-progress-top">
+            <div class="card-progress-status">
+              <span class="${spinnerCls}" id="card-spinner-ig-${item.id}">${spinnerText}</span>
+              <span class="card-progress-text" id="card-text-ig-${item.id}">${escapeHtml(up.text || 'Connecting to Meta Graph API...')}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="card-progress-num" id="card-num-ig-${item.id}">${up.percent || 15}%</span>
+              <button type="button" class="btn-card-terminal" onclick="window.shortsAppOpenInstagramTerminal(${item.id})" title="Inspect live upload in Terminal Drawer">
+                <svg class="icon"><use href="#i-terminal"/></svg>
+                <span>Terminal</span>
+              </button>
+            </div>
+          </div>
+          <div class="card-progress-track">
+            <div class="card-progress-fill" id="card-fill-ig-${item.id}" style="width: ${up.percent || 15}%;"></div>
+          </div>
+        </div>
+      `;
+    };
+
+    const renderYtBtn = () => `
+      <button class="publish-btn-quick ${isYtDone ? 'is-done' : ''}" data-publish-id="${item.id}" title="${isYtDone ? (item.youtubeId ? 'View Short on YouTube' : 'Already uploaded to YouTube') : 'Publish this Short to YouTube'}">
+        <svg class="icon"><use href="${isYtDone ? '#i-check' : '#i-youtube'}"/></svg><span>${isYtDone ? 'Uploaded' : 'YouTube'}</span>
+      </button>
+    `;
+
+    const renderIgBtn = () => {
+      if (isLongform) {
+        return `
+          <button class="publish-btn-instagram is-disabled-longform" disabled title="Instagram Reels limit is 90s. This feature video is formatted for YouTube.">
+            <svg class="icon"><use href="#i-youtube"/></svg><span>YouTube Only</span>
+          </button>
+        `;
+      }
+      return `
+        <button class="publish-btn-instagram ${isIgDone ? 'is-published' : ''}" data-instagram-id="${item.id}" title="${isIgDone ? (item.instagramUrl ? 'View Reel on Instagram' : 'Already published to Instagram') : 'Publish Reel to Instagram in 1 click'}">
+          <svg class="icon"><use href="${isIgDone ? '#i-check' : '#i-instagram'}"/></svg><span>${isIgDone ? 'IG Reel' : 'Instagram'}</span>
+        </button>
+      `;
+    };
+
+    // Neither is uploading: display side-by-side buttons
+    if (!ytUp && !igUp) {
+      return `
+        <div class="publish-card-actions" id="card-actions-${item.id}">
+          <div class="publish-card-btn-row">
+            ${renderYtBtn()}
+            ${renderIgBtn()}
+          </div>
+        </div>
+      `;
+    }
+
+    // When one or both are uploading: stack them cleanly full-width without truncation
+    return `
+      <div class="publish-card-actions is-uploading" id="card-actions-${item.id}">
+        ${ytUp ? renderYtProgress(ytUp) : renderYtBtn()}
+        ${igUp ? renderIgProgress(igUp) : renderIgBtn()}
+      </div>
+    `;
+  }
+
+  function updateCardActionsDOM(shortId) {
+    const card = document.querySelector(`.publish-card[data-card-id="${shortId}"]`);
+    if (!card) return;
+    const item = (state.library || []).find(x => x.id === shortId);
+    if (!item) return;
+    const actionsContainer = card.querySelector('.publish-card-actions');
+    if (!actionsContainer) return;
+    actionsContainer.outerHTML = renderCardActions(item);
+
+    const newCard = document.querySelector(`.publish-card[data-card-id="${shortId}"]`);
+    if (!newCard) return;
+    const ytBtn = newCard.querySelector('.publish-btn-quick');
+    if (ytBtn) {
+      ytBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (item.youtubeId) {
+          window.open(`https://youtube.com/shorts/${item.youtubeId}`, '_blank');
+          return;
+        }
+        openPublishAccountModal(shortId, item.title || `Short #${shortId}`);
+      });
+    }
+    const igBtn = newCard.querySelector('.publish-btn-instagram');
+    if (igBtn) {
+      igBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (item.instagramUrl) {
+          window.open(item.instagramUrl, '_blank');
+        } else {
+          openInstagramModal(item);
+        }
+      });
+    }
+  }
+
   async function refreshPublishQueue() {
     const data = await apiGet('/api/library');
     if (!data) return;
     state.library = data;
-    const pending = data.filter(i => !i.uploaded);
 
-    // Filter by selected category: 'all', 'live', 'stream', 'longform', 'standard'
+    // Filter by selected category or status:
     const cat = state.publishCategory || 'all';
-    let filtered = pending;
-    if (cat === 'live') {
-      filtered = pending.filter(i => i.source === 'live');
-    } else if (cat === 'stream') {
-      filtered = pending.filter(i => i.source === 'stream' || i.source === 'post_live');
-    } else if (cat === 'longform') {
-      filtered = pending.filter(i => i.source === 'longform');
-    } else if (cat === 'standard') {
-      filtered = pending.filter(i => i.source !== 'live' && i.source !== 'stream' && i.source !== 'post_live' && i.source !== 'longform');
+    let filtered = [];
+
+    if (cat === 'all') {
+      // By default: any short that still needs YouTube OR Instagram
+      filtered = data.filter(i => isShortPending(i));
+    } else if (cat === 'need_instagram') {
+      filtered = data.filter(i => !isShortIgDone(i));
+    } else if (cat === 'need_youtube') {
+      filtered = data.filter(i => !isShortYtDone(i));
+    } else if (cat === 'all_shorts') {
+      filtered = data;
+    } else {
+      const basePending = data.filter(i => isShortPending(i));
+      if (cat === 'live') {
+        filtered = basePending.filter(i => i.source === 'live');
+      } else if (cat === 'stream') {
+        filtered = basePending.filter(i => i.source === 'stream' || i.source === 'post_live');
+      } else if (cat === 'longform') {
+        filtered = basePending.filter(i => i.source === 'longform');
+      } else if (cat === 'standard') {
+        filtered = basePending.filter(i => i.source !== 'live' && i.source !== 'stream' && i.source !== 'post_live' && i.source !== 'longform');
+      } else {
+        filtered = basePending;
+      }
     }
 
     const qCount = document.getElementById('queue-count');
@@ -1485,8 +1715,8 @@
 
         <!-- Preview with Play Button Overlay -->
         <div class="publish-card-preview" data-watch-id="${item.id}">
-          ${item.storageUrl ? `
-            <video src="${escapeHtml(item.storageUrl)}" preload="metadata" muted playsinline></video>
+          ${(item.storageUrl || item.videoUrl || item.hasLocal) ? `
+            <video src="${escapeHtml(item.storageUrl || item.videoUrl || `/api/video?id=${item.id}`)}" preload="metadata" muted playsinline></video>
           ` : `
             <div class="preview-fallback">
               <svg class="icon" style="width:28px; height:28px;"><use href="#i-film"/></svg>
@@ -1502,43 +1732,21 @@
 
         <!-- Body -->
         <div class="publish-card-body">
-          <div class="publish-card-title">${escapeHtml(item.title)}</div>
+          <div class="publish-card-title-row" style="display:flex; align-items:flex-start; justify-content:space-between; gap:6px;">
+            <div class="publish-card-title" id="card-title-${item.id}" style="cursor:pointer;" title="Click to rename title">${escapeHtml(item.title)}</div>
+            <button type="button" class="btn-rename-card" data-rename-id="${item.id}" title="Rename Title" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:2px; flex-shrink:0;">
+              <svg class="icon" style="width:13px; height:13px;"><use href="#i-edit"/></svg>
+            </button>
+          </div>
           ${item.sourceTitle ? `<div class="publish-card-source">${escapeHtml(item.sourceTitle)}</div>` : ''}
           <div class="publish-card-meta">
-            <span class="chip-part-badge">Part ${item.part}/${item.parts}</span>
+            ${(item.parts && item.parts > 1) ? `<span class="chip-part-badge">Part ${item.part}/${item.parts}</span>` : ''}
             ${item.score ? `<span class="chip-score-badge">${item.score}/10</span>` : ''}
+            ${item.isLocalOnly ? `<span class="chip-local-badge" title="Saved locally on disk - exceeds Supabase 50MB free quota">💾 Local (${item.fileSizeMb || 0} MB)</span>` : ''}
             ${renderSourceBadge(item.source)}
           </div>
-          <!-- Action: Live Loading Progress Bar OR Publish Button -->
-          ${(() => {
-        const up = state.activeUploads && state.activeUploads[item.id];
-        if (up) {
-          const isSuccess = up.status === 'success';
-          const isError = up.status === 'error';
-          const cls = isSuccess ? 'publish-card-progress success' : (isError ? 'publish-card-progress error' : 'publish-card-progress');
-          const spinnerCls = isSuccess ? 'card-progress-spinner done' : (isError ? 'card-progress-spinner fail' : 'card-progress-spinner');
-          const spinnerText = isSuccess ? '✓' : (isError ? '✗' : '');
-          return `
-                <div class="${cls}" id="card-progress-${item.id}">
-                  <div class="card-progress-top">
-                    <div class="card-progress-status">
-                      <span class="${spinnerCls}" id="card-spinner-${item.id}">${spinnerText}</span>
-                      <span class="card-progress-text" id="card-text-${item.id}">${escapeHtml(up.text || 'Uploading...')}</span>
-                    </div>
-                    <span class="card-progress-num" id="card-num-${item.id}">${up.percent || 15}%</span>
-                  </div>
-                  <div class="card-progress-track">
-                    <div class="card-progress-fill" id="card-fill-${item.id}" style="width: ${up.percent || 15}%;"></div>
-                  </div>
-                </div>
-              `;
-        }
-        return `
-              <button class="publish-btn-quick" data-publish-id="${item.id}" title="Publish this Short to YouTube">
-                <svg class="icon"><use href="#i-youtube"/></svg>Publish to YouTube
-              </button>
-            `;
-      })()}
+          <!-- Action: Independent YouTube & Instagram Slots (Progress Bar + 1-Click Buttons) -->
+          ${renderCardActions(item)}
         </div>
       </div>
     `).join('');
@@ -1590,9 +1798,36 @@
     container.querySelectorAll('[data-delete-id]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        const id = parseInt(el.dataset.deleteId, 10);
-        const item = state.library.find(x => x.id === id);
-        if (item) openDeleteModal(item);
+        e.preventDefault();
+        const id = el.dataset.deleteId;
+        const item = (state.library || []).find(x => String(x.id) === String(id)) || { id: id, title: `Short #${id}` };
+        openDeleteModal(item);
+      });
+    });
+
+    // Wire up Rename triggers
+    container.querySelectorAll('.btn-rename-card, .publish-card-title').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const card = el.closest('.publish-card');
+        const id = parseInt(card?.dataset?.cardId || el.dataset.renameId, 10);
+        const item = (state.library || []).find(x => x.id === id);
+        if (!item) return;
+        const currentTitle = item.title || '';
+        const newTitle = prompt('Rename video title (used for YouTube & Instagram):', currentTitle);
+        if (newTitle !== null && newTitle.trim() && newTitle.trim() !== currentTitle) {
+          const trimmed = newTitle.trim();
+          try {
+            await apiPost('/api/publish/rename', { id, title: trimmed });
+            item.title = trimmed;
+            const titleEl = document.getElementById(`card-title-${id}`);
+            if (titleEl) titleEl.textContent = trimmed;
+            toast(`Renamed to "${trimmed}"`, 'ok');
+          } catch (err) {
+            toast(`Failed to rename: ${err.message}`, 'error');
+          }
+        }
       });
     });
 
@@ -1601,15 +1836,34 @@
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const shortId = parseInt(btn.dataset.publishId, 10);
-        const item = state.library.find(x => x.id === shortId);
+        const item = (state.library || []).find(x => x.id === shortId);
+        if (item && item.youtubeId) {
+          window.open(`https://youtube.com/shorts/${item.youtubeId}`, '_blank');
+          return;
+        }
         openPublishAccountModal(shortId, item ? item.title : `Short #${shortId}`);
+      });
+    });
+
+    // Wire up Instagram 1-click publish buttons
+    container.querySelectorAll('.publish-btn-instagram').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const shortId = parseInt(btn.dataset.instagramId, 10);
+        const item = state.library.find(x => x.id === shortId);
+        if (!item) return;
+        if (item.instagramUrl) {
+          window.open(item.instagramUrl, '_blank');
+        } else {
+          openInstagramModal(item);
+        }
       });
     });
 
     // Wire up clicking card body to open details drawer
     container.querySelectorAll('.publish-card-body').forEach(body => {
       body.addEventListener('click', (e) => {
-        if (e.target.closest('[data-watch-id]') || e.target.closest('[data-delete-id]')) return;
+        if (e.target.closest('[data-watch-id]') || e.target.closest('[data-delete-id]') || e.target.closest('.btn-rename-card') || e.target.closest('.publish-card-title') || e.target.closest('.publish-btn-quick') || e.target.closest('.publish-btn-instagram')) return;
         const card = body.closest('.publish-card');
         const id = parseInt(card.dataset.cardId, 10);
         const item = state.library.find(x => x.id === id);
@@ -1683,9 +1937,9 @@
     }
 
     if (state.createMode === 'standard') {
-      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-film"/></svg><span>Standard Video Mode · Snaps to natural sentences & clauses</span>';
+      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-film"/></svg><span>Standard Video Mode</span>';
       if (urlLabel) urlLabel.textContent = 'YouTube Video URL';
-      if (urlHint) urlHint.textContent = 'Enter the video URL of another YouTuber to analyze and extract viral Shorts.';
+      if (urlHint) urlHint.textContent = '';
       if (startText) startText.textContent = 'Start Clipping Video';
       if (liveControls) liveControls.style.display = 'none';
       if (stdControls) stdControls.style.display = 'flex';
@@ -1694,9 +1948,9 @@
       if (montageControls) montageControls.style.display = 'none';
       if (previewBox) previewBox.style.display = 'none';
     } else if (state.createMode === 'stream') {
-      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:#c084fc; margin-right:6px;"><use href="#i-video"/></svg><span>Post Livestream Mode · Dynamic up-to-120s extension + profanity bleeping</span>';
+      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:#c084fc; margin-right:6px;"><use href="#i-video"/></svg><span>Post Livestream Mode</span>';
       if (urlLabel) urlLabel.textContent = 'Post-Livestream / Stream VOD URL';
-      if (urlHint) urlHint.textContent = 'Enter the URL of an already streamed / concluded broadcast to extract highlight clips.';
+      if (urlHint) urlHint.textContent = '';
       if (startText) startText.textContent = 'Start Clipping Post Livestream';
       if (liveControls) liveControls.style.display = 'none';
       if (stdControls) stdControls.style.display = 'flex';
@@ -1705,9 +1959,9 @@
       if (montageControls) montageControls.style.display = 'none';
       if (previewBox) previewBox.style.display = 'none';
     } else if (state.createMode === 'live') {
-      if (badge) badge.innerHTML = '<span class="live-dot" style="width:8px; height:8px; border-radius:50%; background:#ff0033; display:inline-block; margin-right:6px;"></span><span style="color:#ff335c;">Monitor Live Stream · Autonomous agent cuts clips into livestream-shorts bucket</span>';
+      if (badge) badge.innerHTML = '<span class="live-dot" style="width:8px; height:8px; border-radius:50%; background:#ff0033; display:inline-block; margin-right:6px;"></span><span style="color:#ff335c;">Live Stream Monitor</span>';
       if (urlLabel) urlLabel.textContent = 'Live Channel or Stream URL';
-      if (urlHint) urlHint.textContent = 'Enter the channel or active livestream URL. Agent monitors and clips continuously.';
+      if (urlHint) urlHint.textContent = '';
       if (startText) startText.textContent = 'Start Live Monitoring';
       if (liveControls) liveControls.style.display = 'flex';
       if (stdControls) stdControls.style.display = 'none';
@@ -1726,9 +1980,9 @@
         }
       }
     } else if (state.createMode === 'longform') {
-      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-film"/></svg><span>Video Edit Mode · 7 to 9 Minute Narrative Feature from Stream VOD</span>';
+      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-film"/></svg><span>Video Edit Mode</span>';
       if (urlLabel) urlLabel.textContent = 'Livestream VOD URL';
-      if (urlHint) urlHint.textContent = 'Enter your completed livestream broadcast to edit into a high-retention 7-9 min YouTube video.';
+      if (urlHint) urlHint.textContent = '';
       if (startText) startText.textContent = 'Generate 7-9m Feature Video';
       if (liveControls) liveControls.style.display = 'none';
       if (stdControls) stdControls.style.display = 'none';
@@ -1737,9 +1991,9 @@
       if (montageControls) montageControls.style.display = 'none';
       if (previewBox) previewBox.style.display = 'none';
     } else if (state.createMode === 'montage') {
-      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-activity"/></svg><span>Viral Montage Mode · Peak audio spikes, 1.18x punch-ins &amp; dynamic pacing</span>';
+      if (badge) badge.innerHTML = '<svg class="icon" style="width:14px; height:14px; color:var(--accent-light); margin-right:6px;"><use href="#i-activity"/></svg><span>Viral Montage Mode</span>';
       if (urlLabel) urlLabel.textContent = 'YouTube Video or Livestream URL';
-      if (urlHint) urlHint.textContent = 'Enter any YouTube livestream, VOD, or video to extract peak reaction moments into an automated montage.';
+      if (urlHint) urlHint.textContent = '';
       if (startText) startText.textContent = 'Build Viral Montage';
       if (liveControls) liveControls.style.display = 'none';
       if (stdControls) stdControls.style.display = 'none';
@@ -1841,7 +2095,7 @@
           crop: getSegmentedValue('process-crop') || 'blurred_background',
           autoUpload: document.getElementById('process-autoupload').checked,
           enableCaptions: document.getElementById('process-enable-captions') ? document.getElementById('process-enable-captions').checked : false,
-          noBleep: document.getElementById('process-nobleep') ? document.getElementById('process-nobleep').checked : false,
+          bleep: document.getElementById('process-nobleep') ? document.getElementById('process-nobleep').checked : false,
         };
 
         try {
@@ -1851,7 +2105,7 @@
         } catch (err) { }
       } else if (state.createMode === 'longform') {
         const targetRuntime = parseInt(getSegmentedValue('longform-runtime-selector') || '480', 10);
-        let focusTimestamp = 4210.0;
+        let focusTimestamp = 0.0;
         const focusInput = document.getElementById('longform-focus-ts');
         if (focusInput && focusInput.value.trim()) {
           const val = focusInput.value.trim();
@@ -1862,6 +2116,9 @@
           } else {
             focusTimestamp = parseFloat(val) || 0.0;
           }
+        } else if (url && url.includes('t=')) {
+          const match = url.match(/[?&]t=([0-9]+)/);
+          if (match) focusTimestamp = parseFloat(match[1]) || 0.0;
         }
         const options = {
           url,
@@ -1902,7 +2159,8 @@
           autoUpload: document.getElementById('process-autoupload').checked,
           streamMode: isStreamMode,
           enableCaptions: document.getElementById('process-enable-captions') ? document.getElementById('process-enable-captions').checked : false,
-          noBleep: document.getElementById('process-nobleep').checked,
+          bleep: document.getElementById('process-nobleep') ? document.getElementById('process-nobleep').checked : false,
+          noBleep: document.getElementById('process-nobleep') ? !document.getElementById('process-nobleep').checked : true,
           keepRaw: document.getElementById('process-keepraw').checked,
           model: document.getElementById('process-model').value || 'base',
           prompt: customPrompt,
@@ -2865,12 +3123,34 @@
     // Morphing logo button in collapsed rail
     if (logoBtn) {
       logoBtn.addEventListener('click', (e) => {
+        if (window.innerWidth <= 840) {
+          e.stopPropagation();
+          sidebar.classList.toggle('mobile-expanded');
+          return;
+        }
         if (sidebar.classList.contains('collapsed')) {
           e.stopPropagation();
           setSidebarCollapsed(false);
         }
       });
     }
+
+    // Close mobile expanded sidebar on clicking nav items or outside
+    document.addEventListener('click', (e) => {
+      if (sidebar && sidebar.classList.contains('mobile-expanded')) {
+        if (!sidebar.contains(e.target)) {
+          sidebar.classList.remove('mobile-expanded');
+        }
+      }
+    });
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        if (sidebar && sidebar.classList.contains('mobile-expanded')) {
+          sidebar.classList.remove('mobile-expanded');
+        }
+      });
+    });
 
     // Drag-to-resize sidebar
     if (resizer) {
@@ -2944,9 +3224,12 @@
       if (isLongform) {
         part.textContent = 'Longform Feature';
         part.className = 'chip chip-scheduled';
-      } else {
-        part.textContent = `Part ${item.part || 1}/${item.parts || 1}`;
+      } else if (item.parts && item.parts > 1) {
+        part.textContent = `Part ${item.part || 1}/${item.parts}`;
         part.className = 'chip chip-warn';
+      } else {
+        part.textContent = 'Viral Short';
+        part.className = 'chip chip-scheduled';
       }
     }
     if (score) score.textContent = isLongform ? 'Full Narrative Cut' : (item.score ? `${item.score}/10 Score` : 'Viral Clip');
@@ -2977,19 +3260,60 @@
     activeModalShort = null;
   }
 
+  let deleteAutoCloseTimer = null;
+
+  function setDeleteModalState(mode) {
+    const confirmEl = document.getElementById('delete-state-confirm');
+    const loadingEl = document.getElementById('delete-state-loading');
+    const successEl = document.getElementById('delete-state-success');
+    const errorEl = document.getElementById('delete-state-error');
+
+    if (confirmEl) confirmEl.style.display = (mode === 'confirm') ? 'block' : 'none';
+    if (loadingEl) loadingEl.style.display = (mode === 'loading') ? 'block' : 'none';
+    if (successEl) successEl.style.display = (mode === 'success') ? 'block' : 'none';
+    if (errorEl) errorEl.style.display = (mode === 'error') ? 'block' : 'none';
+  }
+
   function openDeleteModal(item) {
+    if (deleteAutoCloseTimer) {
+      clearTimeout(deleteAutoCloseTimer);
+      deleteAutoCloseTimer = null;
+    }
     activeDeleteShort = item;
     const backdrop = document.getElementById('delete-modal-backdrop');
     const titleEl = document.getElementById('delete-modal-short-title');
-    if (titleEl) titleEl.textContent = `"${item.title || 'this Short'}" (#${item.id})`;
+    const confirmBtn = document.getElementById('delete-modal-confirm');
+
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `<svg class="icon"><use href="#i-trash" /></svg>Delete Video`;
+    }
+
+    const shortName = item ? (item.title || (item.id ? `Short #${item.id}` : (item.filename || 'this video'))) : 'this video';
+    const idTag = item && item.id ? ` (#${item.id})` : '';
+    if (titleEl) titleEl.textContent = `${shortName}${idTag}`;
+
+    setDeleteModalState('confirm');
     if (backdrop) backdrop.hidden = false;
   }
 
   function closeDeleteModal() {
+    // If currently deleting in flight, prevent closing to avoid desync
+    const loadingEl = document.getElementById('delete-state-loading');
+    if (loadingEl && loadingEl.style.display === 'block') return;
+
+    if (deleteAutoCloseTimer) {
+      clearTimeout(deleteAutoCloseTimer);
+      deleteAutoCloseTimer = null;
+    }
     const backdrop = document.getElementById('delete-modal-backdrop');
     if (backdrop) backdrop.hidden = true;
     activeDeleteShort = null;
   }
+
+  window.openDeleteModal = openDeleteModal;
+  window.setDeleteModalState = setDeleteModalState;
+  window.closeDeleteModal = closeDeleteModal;
 
   function initVideoModals() {
     const videoClose = document.getElementById('video-modal-close');
@@ -3008,6 +3332,16 @@
         const item = activeModalShort;
         closeVideoModal();
         openPublishAccountModal(item.id, item.title);
+      });
+    }
+
+    const modalInstagramBtn = document.getElementById('video-modal-instagram-btn');
+    if (modalInstagramBtn) {
+      modalInstagramBtn.addEventListener('click', () => {
+        if (!activeModalShort) return;
+        const item = activeModalShort;
+        closeVideoModal();
+        openInstagramModal(item);
       });
     }
 
@@ -3030,7 +3364,11 @@
     if (deleteClose) deleteClose.addEventListener('click', closeDeleteModal);
     if (deleteBackdrop) {
       deleteBackdrop.addEventListener('click', (e) => {
-        if (e.target === deleteBackdrop) closeDeleteModal();
+        if (e.target === deleteBackdrop) {
+          const loadingEl = document.getElementById('delete-state-loading');
+          if (loadingEl && loadingEl.style.display === 'block') return;
+          closeDeleteModal();
+        }
       });
     }
 
@@ -3038,22 +3376,82 @@
       deleteConfirm.addEventListener('click', async () => {
         if (!activeDeleteShort) return;
         const short = activeDeleteShort;
-        deleteConfirm.disabled = true;
-        deleteConfirm.innerHTML = `<span class="dot warn"></span> Deleting...`;
+        const shortName = short.title ? `"${short.title}"${short.id ? ` (#${short.id})` : ''}` : (short.id ? `Short #${short.id}` : (short.filename || 'Video'));
+
+        // 1. Show Deleting Dialog Box State
+        setDeleteModalState('loading');
+        const loadingTitleEl = document.getElementById('delete-loading-title');
+        if (loadingTitleEl) {
+          loadingTitleEl.textContent = `Purging ${shortName} from Supabase & storage...`;
+        }
+
         try {
-          const res = await apiPost('/api/publish/delete', { id: short.id });
-          if (res.error) throw new Error(res.error);
-          toast(`Short #${short.id} deleted from Supabase & database`, 'ok');
-          closeDeleteModal();
-          state.library = state.library.filter(x => x.id !== short.id);
+          const res = await apiPost('/api/publish/delete', {
+            id: short.id || 0,
+            filename: short.filename || ''
+          });
+          if (res && res.error) throw new Error(res.error);
+
+          // Update application state
+          if (short.id) {
+            state.library = (state.library || []).filter(x => x.id !== short.id);
+          }
+          if (short.filename) {
+            state.editedVideos = (state.editedVideos || []).filter(x => x.filename !== short.filename);
+            const countEl = document.getElementById('lib-edited-count');
+            if (countEl) {
+              countEl.textContent = state.editedVideos.length;
+              countEl.style.display = state.editedVideos.length > 0 ? 'inline-block' : 'none';
+            }
+          }
+          renderLibraryList();
           refreshPublishQueue();
           refreshOverview();
+          updateScheduledBadges();
+          toast(`${shortName} deleted from Supabase & database`, 'ok');
+
+          // 2. Show Deleted (Success) Dialog Box State
+          setDeleteModalState('success');
+          const successTitleEl = document.getElementById('delete-success-title');
+          if (successTitleEl) {
+            successTitleEl.textContent = `${shortName} has been permanently removed.`;
+          }
+
+          // Auto-close after 1.8 seconds if user doesn't click Done
+          deleteAutoCloseTimer = setTimeout(() => {
+            const backdrop = document.getElementById('delete-modal-backdrop');
+            if (backdrop && !backdrop.hidden) {
+              const successEl = document.getElementById('delete-state-success');
+              if (successEl && successEl.style.display === 'block') {
+                closeDeleteModal();
+              }
+            }
+          }, 1800);
+
         } catch (err) {
+          // 3. Show Error Dialog Box State
+          setDeleteModalState('error');
+          const errMsgEl = document.getElementById('delete-error-message');
+          if (errMsgEl) {
+            errMsgEl.textContent = err.message || 'Failed to delete video';
+          }
           toast(`Delete failed: ${err.message}`, 'error');
-        } finally {
-          deleteConfirm.disabled = false;
-          deleteConfirm.innerHTML = `<svg class="icon"><use href="#i-trash" /></svg>Delete from Supabase`;
         }
+      });
+    }
+
+    const deleteDoneBtn = document.getElementById('delete-modal-done');
+    if (deleteDoneBtn) {
+      deleteDoneBtn.addEventListener('click', () => {
+        if (deleteAutoCloseTimer) clearTimeout(deleteAutoCloseTimer);
+        closeDeleteModal();
+      });
+    }
+
+    const deleteErrorCloseBtn = document.getElementById('delete-modal-error-close');
+    if (deleteErrorCloseBtn) {
+      deleteErrorCloseBtn.addEventListener('click', () => {
+        closeDeleteModal();
       });
     }
 
@@ -3187,6 +3585,14 @@
 
     if (titleEl) titleEl.textContent = shortTitle || `Short #${shortId}`;
 
+    // Prefill editable title input
+    const titleInput = document.getElementById('account-publish-title-input');
+    const titleCount = document.getElementById('account-publish-title-count');
+    if (titleInput) {
+      titleInput.value = shortTitle || '';
+      if (titleCount) titleCount.textContent = `${titleInput.value.length} / 100`;
+    }
+
     // Reset timing mode to "now"
     const btnNow = document.getElementById('timing-btn-now');
     const btnSchedule = document.getElementById('timing-btn-schedule');
@@ -3228,7 +3634,7 @@
     const accounts = (state.accounts && state.accounts.accounts && state.accounts.accounts.length)
       ? state.accounts.accounts
       : [
-        { id: 'alternate', name: 'Eiji Shorts', email: 'mhrznsuzan.alternate@gmail.com', handle: '@eijishorts', authenticated: true },
+        { id: 'alternate', name: 'speedshorts-yt5', email: 'mhrznsuzan.alternate@gmail.com', handle: '@speedshorts-yt5', authenticated: true },
         { id: 'official', name: 'Suzzane', email: 'maharjansujan.official@gmail.com', handle: '@MR.EIJI05', authenticated: true }
       ];
 
@@ -3372,9 +3778,9 @@
     const accounts = (state.accounts && state.accounts.accounts) || [];
     const chosenAccount = accounts.find(a => a.id === chosenId) || {
       id: chosenId,
-      name: chosenId === 'official' ? 'Suzzane' : 'Eiji Shorts',
+      name: chosenId === 'official' ? 'Suzzane' : 'speedshorts-yt5',
       email: chosenId === 'official' ? 'maharjansujan.official@gmail.com' : 'mhrznsuzan.alternate@gmail.com',
-      handle: chosenId === 'official' ? '@MR.EIJI05' : '@eijishorts'
+      handle: chosenId === 'official' ? '@MR.EIJI05' : '@speedshorts-yt5'
     };
 
     // Check if Schedule timing mode is active
@@ -3413,7 +3819,21 @@
       } catch (err) { }
     }
 
-    startCardUpload(shortId, chosenAccount, publishAt);
+    // Extract edited title if provided
+    const titleInput = document.getElementById('account-publish-title-input');
+    const customTitle = titleInput ? titleInput.value.trim() : '';
+
+    if (customTitle) {
+      const item = (state.library || []).find(x => x.id === shortId);
+      if (item && item.title !== customTitle) {
+        item.title = customTitle;
+        const titleEl = document.getElementById(`card-title-${shortId}`);
+        if (titleEl) titleEl.textContent = customTitle;
+        apiPost('/api/publish/rename', { id: shortId, title: customTitle }).catch(() => {});
+      }
+    }
+
+    startCardUpload(shortId, chosenAccount, publishAt, customTitle);
   }
 
   function initStudioDateTimeInput() {
@@ -3696,6 +4116,14 @@
       });
     }
 
+    const titleInput = document.getElementById('account-publish-title-input');
+    const titleCount = document.getElementById('account-publish-title-count');
+    if (titleInput && titleCount) {
+      titleInput.addEventListener('input', () => {
+        titleCount.textContent = `${titleInput.value.length} / 100`;
+      });
+    }
+
     // Release timing tabs: Now vs Schedule
     const btnNow = document.getElementById('timing-btn-now');
     const btnSchedule = document.getElementById('timing-btn-schedule');
@@ -3839,8 +4267,8 @@
 
       // Update target account label
       const activeAccount = (state.accounts && state.accounts.accounts && state.accounts.accounts.find(a => a.id === state.accounts.active_id)) || {
-        name: 'EIJI Shorts',
-        handle: '@eijishorts'
+        name: 'speedshorts-yt5',
+        handle: '@speedshorts-yt5'
       };
       if (accountNameEl) {
         accountNameEl.textContent = `Target: ${activeAccount.name} (${activeAccount.handle || '@YouTube'})`;
@@ -3998,7 +4426,7 @@
     openTerminalDrawer();
   };
 
-  async function startCardUpload(shortId, account, publishAt = null) {
+  async function startCardUpload(shortId, account, publishAt = null, customTitle = null) {
     state.activeUploads = state.activeUploads || {};
     const handleText = account.handle || account.name || '@YouTube';
     const isScheduled = !!publishAt;
@@ -4014,38 +4442,16 @@
       status: 'running'
     };
 
-    // Update specific card in DOM immediately without re-rendering entire grid
-    const card = document.querySelector(`.publish-card[data-card-id="${shortId}"]`);
-    if (card) {
-      const btn = card.querySelector('.publish-btn-quick');
-      if (btn) {
-        btn.outerHTML = `
-          <div class="publish-card-progress" id="card-progress-${shortId}">
-            <div class="card-progress-top">
-              <div class="card-progress-status">
-                <span class="card-progress-spinner" id="card-spinner-${shortId}"></span>
-                <span class="card-progress-text" id="card-text-${shortId}">${escapeHtml(state.activeUploads[shortId].text)}</span>
-              </div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <span class="card-progress-num" id="card-num-${shortId}">15%</span>
-                <button type="button" class="btn-card-terminal" onclick="window.shortsAppOpenUploadTerminal(${shortId})" title="Inspect live upload in Terminal Drawer">
-                  <svg class="icon"><use href="#i-terminal"/></svg>
-                  <span>Terminal</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-progress-track">
-              <div class="card-progress-fill" id="card-fill-${shortId}" style="width: 15%;"></div>
-            </div>
-          </div>
-        `;
-      }
-    }
+    // Update specific card in DOM immediately with independent vertical slots
+    updateCardActionsDOM(shortId);
 
     try {
       const options = { id: shortId, account_id: account.id };
       if (publishAt) {
         options.publish_at = publishAt;
+      }
+      if (customTitle) {
+        options.title = customTitle;
       }
       const job = await apiPost('/api/run', {
         kind: 'upload_single',
@@ -4160,13 +4566,23 @@
     if (state.activeUploads && state.activeUploads[shortId]) {
       state.activeUploads[shortId].percent = percent;
       state.activeUploads[shortId].text = text;
+      const fill = document.getElementById(`card-fill-${shortId}`);
+      const num = document.getElementById(`card-num-${shortId}`);
+      const txt = document.getElementById(`card-text-${shortId}`);
+      if (fill) fill.style.width = `${percent}%`;
+      if (num) num.textContent = `${percent}%`;
+      if (txt) txt.textContent = text;
     }
-    const fill = document.getElementById(`card-fill-${shortId}`);
-    const num = document.getElementById(`card-num-${shortId}`);
-    const txt = document.getElementById(`card-text-${shortId}`);
-    if (fill) fill.style.width = `${percent}%`;
-    if (num) num.textContent = `${percent}%`;
-    if (txt) txt.textContent = text;
+    if (state.activeInstagramUploads && state.activeInstagramUploads[shortId]) {
+      state.activeInstagramUploads[shortId].percent = percent;
+      state.activeInstagramUploads[shortId].text = text;
+      const fillIg = document.getElementById(`card-fill-ig-${shortId}`) || document.getElementById(`card-fill-${shortId}`);
+      const numIg = document.getElementById(`card-num-ig-${shortId}`) || document.getElementById(`card-num-${shortId}`);
+      const txtIg = document.getElementById(`card-text-ig-${shortId}`) || document.getElementById(`card-text-${shortId}`);
+      if (fillIg) fillIg.style.width = `${percent}%`;
+      if (numIg) numIg.textContent = `${percent}%`;
+      if (txtIg) txtIg.textContent = text;
+    }
   }
 
   function updateCardProgressSuccess(shortId, text, isScheduled = false) {
@@ -4227,6 +4643,329 @@
       refreshPublishQueue();
     }, 3200);
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // 1-Click Instagram Reels Publisher
+  // ─────────────────────────────────────────────────────────────
+  let activeInstagramShort = null;
+
+  async function fetchInstagramAccount() {
+    try {
+      const data = await apiGet('/api/instagram/account');
+      state.instagramProfile = data;
+      updateInstagramProfileUI(data);
+      return data;
+    } catch (e) {
+      console.warn('Could not fetch Instagram profile:', e);
+      return null;
+    }
+  }
+
+  function updateInstagramProfileUI(profile) {
+    const nameEl = document.getElementById('instagram-profile-name');
+    const handleEl = document.getElementById('instagram-profile-handle');
+    const avatarEl = document.getElementById('instagram-profile-avatar');
+    const badgeEl = document.getElementById('instagram-profile-badge');
+
+    if (profile && profile.connected) {
+      if (nameEl) nameEl.textContent = profile.name || 'SIcreator';
+      if (handleEl) handleEl.textContent = profile.username ? `@${profile.username}` : '@sicre.ator';
+      if (avatarEl && profile.profile_picture_url) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(profile.profile_picture_url)}" alt="avatar">`;
+      }
+      if (badgeEl) {
+        badgeEl.className = 'chip chip-ok';
+        badgeEl.innerHTML = `<span class="status-dot ok"></span>Connected`;
+      }
+    } else {
+      if (nameEl) nameEl.textContent = 'SIcreator';
+      if (handleEl) handleEl.textContent = '@sicre.ator';
+      if (badgeEl) {
+        badgeEl.className = 'chip chip-warn';
+        badgeEl.innerHTML = `<span class="status-dot warn"></span>Checking...`;
+      }
+    }
+  }
+
+  function openInstagramModal(item) {
+    activeInstagramShort = item;
+    const backdrop = document.getElementById('instagram-publish-modal-backdrop');
+    const titleEl = document.getElementById('instagram-short-title');
+    const partEl = document.getElementById('instagram-short-part');
+    const durEl = document.getElementById('instagram-short-duration');
+    const srcEl = document.getElementById('instagram-short-source');
+    const captionInput = document.getElementById('instagram-caption-input');
+    const countEl = document.getElementById('instagram-char-count');
+    const confirmBtn = document.getElementById('instagram-publish-confirm');
+
+    if (!backdrop) return;
+
+    if (titleEl) titleEl.textContent = item.title || `Short #${item.id}`;
+
+    // Prefill editable title input
+    const titleInput = document.getElementById('instagram-title-input');
+    const titleCount = document.getElementById('instagram-title-count');
+    if (titleInput) {
+      titleInput.value = item.title || '';
+      if (titleCount) titleCount.textContent = `${titleInput.value.length} / 100`;
+    }
+
+    if (partEl) {
+      if (item.parts && item.parts > 1) {
+        partEl.textContent = `Part ${item.part || 1}/${item.parts}`;
+        partEl.style.display = 'inline-block';
+      } else {
+        partEl.style.display = 'none';
+      }
+    }
+    if (durEl) durEl.textContent = formatDuration(item.duration);
+    if (srcEl) srcEl.textContent = item.source === 'live' ? 'Live Stream' : (item.source === 'longform' ? 'Longform Cut' : 'Standard');
+
+    let defaultCaption = item.title || 'New Reel';
+    const tagList = ['#reels', '#viral', '#trending', '#fyp'];
+    if (item.tags) {
+      const extra = (Array.isArray(item.tags) ? item.tags : String(item.tags).split(',')).map(t => String(t).trim()).filter(Boolean);
+      extra.forEach(t => {
+        const slug = '#' + t.replace(/[^a-zA-Z0-9]/g, '');
+        if (slug.length > 1 && !tagList.includes(slug)) tagList.push(slug);
+      });
+    }
+    const fullCaption = `${defaultCaption}\n\n${tagList.join(' ')}`;
+
+    if (captionInput) {
+      captionInput.value = fullCaption;
+      if (countEl) countEl.textContent = `${fullCaption.length} / 2200`;
+    }
+
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      const textSpan = document.getElementById('instagram-publish-confirm-text');
+      if (textSpan) textSpan.textContent = 'Publish Reel Now';
+    }
+
+    fetchInstagramAccount();
+    backdrop.hidden = false;
+  }
+
+  function closeInstagramModal() {
+    const backdrop = document.getElementById('instagram-publish-modal-backdrop');
+    if (backdrop) backdrop.hidden = true;
+    activeInstagramShort = null;
+  }
+
+  function initInstagramModal() {
+    const backdrop = document.getElementById('instagram-publish-modal-backdrop');
+    const closeBtn = document.getElementById('instagram-publish-close');
+    const cancelBtn = document.getElementById('instagram-publish-cancel');
+    const confirmBtn = document.getElementById('instagram-publish-confirm');
+    const titleInput = document.getElementById('instagram-title-input');
+    const titleCount = document.getElementById('instagram-title-count');
+    const captionInput = document.getElementById('instagram-caption-input');
+    const countEl = document.getElementById('instagram-char-count');
+
+    if (closeBtn) closeBtn.addEventListener('click', closeInstagramModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeInstagramModal);
+    if (backdrop) {
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeInstagramModal();
+      });
+    }
+
+    if (titleInput && titleCount) {
+      titleInput.addEventListener('input', () => {
+        titleCount.textContent = `${titleInput.value.length} / 100`;
+        if (captionInput && activeInstagramShort) {
+          const lines = captionInput.value.split('\n');
+          if (lines.length > 0 && lines[0] === (activeInstagramShort.title || 'New Reel')) {
+            lines[0] = titleInput.value.trim() || 'New Reel';
+            captionInput.value = lines.join('\n');
+            if (countEl) countEl.textContent = `${captionInput.value.length} / 2200`;
+          }
+        }
+      });
+    }
+
+    if (captionInput) {
+      captionInput.addEventListener('input', () => {
+        if (countEl) countEl.textContent = `${captionInput.value.length} / 2200`;
+      });
+    }
+
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', async () => {
+        if (!activeInstagramShort) return;
+        const item = activeInstagramShort;
+        const customTitle = titleInput ? titleInput.value.trim() : '';
+        const caption = captionInput ? captionInput.value.trim() : '';
+
+        if (customTitle && customTitle !== item.title) {
+          item.title = customTitle;
+          const cardTitleEl = document.getElementById(`card-title-${item.id}`);
+          if (cardTitleEl) cardTitleEl.textContent = customTitle;
+          apiPost('/api/publish/rename', { id: item.id, title: customTitle }).catch(() => {});
+        }
+
+        confirmBtn.disabled = true;
+        const textSpan = document.getElementById('instagram-publish-confirm-text');
+        if (textSpan) textSpan.textContent = 'Initiating...';
+
+        closeInstagramModal();
+        startInstagramUpload(item.id, caption, customTitle);
+      });
+    }
+  }
+
+  async function startInstagramUpload(shortId, caption = '', title = '') {
+    state.activeInstagramUploads = state.activeInstagramUploads || {};
+    state.activeInstagramUploads[shortId] = {
+      jobId: null,
+      percent: 15,
+      text: 'Connecting to Meta Graph API...',
+      status: 'running'
+    };
+
+    // Update specific card in DOM immediately with independent vertical slots
+    updateCardActionsDOM(shortId);
+
+    try {
+      const payload = { id: shortId, caption: caption };
+      if (title) payload.title = title;
+      const res = await apiPost('/api/instagram/publish', payload);
+      if (res && res.error) throw new Error(res.error);
+
+      const job = res;
+      state.activeInstagramUploads[shortId].jobId = job.id;
+      attachJobToPanel('run-publish', job.id);
+      pollInstagramUpload(shortId, job.id);
+    } catch (err) {
+      handleInstagramCardUploadError(shortId, err.message || 'Publishing failed');
+    }
+  }
+
+  async function pollInstagramUpload(shortId, jobId) {
+    let afterSeq = 0;
+    let currentPercent = 15;
+
+    const checkJob = async () => {
+      if (!state.activeInstagramUploads || !state.activeInstagramUploads[shortId]) return;
+
+      try {
+        const data = await apiGet(`/api/jobs/${jobId}/log?after=${afterSeq}`);
+        if (!data || !data.job) {
+          setTimeout(checkJob, 750);
+          return;
+        }
+
+        const { job, lines } = data;
+        if (lines && lines.length > 0) {
+          afterSeq = lines[lines.length - 1].n || (afterSeq + lines.length);
+
+          for (const l of lines) {
+            const t = l.t || '';
+            if (t.includes('Fetching short') || t.includes('Initializing')) {
+              currentPercent = Math.max(currentPercent, 20);
+              updateCardProgressUI(shortId, currentPercent, 'Preparing video media...');
+            } else if (t.includes('Supabase Storage') || t.includes('Uploaded local clip')) {
+              currentPercent = Math.max(currentPercent, 40);
+              updateCardProgressUI(shortId, currentPercent, 'Uploading media to storage...');
+            } else if (t.includes('Creating Instagram Reels media container') || t.includes('Created container')) {
+              currentPercent = Math.max(currentPercent, 60);
+              updateCardProgressUI(shortId, currentPercent, 'Creating Reels container...');
+            } else if (t.includes('Waiting for Instagram container')) {
+              currentPercent = Math.max(currentPercent, 80);
+              updateCardProgressUI(shortId, currentPercent, 'Processing on Instagram...');
+            } else if (t.includes('Instagram Reel published successfully')) {
+              currentPercent = 100;
+              updateCardProgressUI(shortId, 100, 'Published to @sicre.ator!');
+            } else if (t.includes('Publication failed') || t.includes('Error:')) {
+              handleInstagramCardUploadError(shortId, 'Instagram publish failed');
+              return;
+            }
+          }
+        }
+
+        if (job.status === 'running') {
+          if (currentPercent < 75 && currentPercent >= 20) {
+            currentPercent = Math.min(74, currentPercent + 3);
+            updateCardProgressUI(shortId, currentPercent, 'Publishing to @sicre.ator...');
+          } else if (currentPercent >= 75 && currentPercent < 95) {
+            currentPercent = Math.min(94, currentPercent + 2);
+            updateCardProgressUI(shortId, currentPercent, 'Finalizing on Instagram...');
+          }
+          setTimeout(checkJob, 750);
+        } else if (job.status === 'done' || job.exitCode === 0) {
+          updateInstagramCardProgressSuccess(shortId, 'Published to @sicre.ator on Instagram!');
+        } else {
+          handleInstagramCardUploadError(shortId, 'Publication process failed');
+        }
+      } catch (err) {
+        setTimeout(checkJob, 1000);
+      }
+    };
+
+    setTimeout(checkJob, 600);
+  }
+
+  function updateInstagramCardProgressSuccess(shortId, text) {
+    if (state.activeInstagramUploads && state.activeInstagramUploads[shortId]) {
+      state.activeInstagramUploads[shortId].status = 'success';
+      state.activeInstagramUploads[shortId].percent = 100;
+      state.activeInstagramUploads[shortId].text = text;
+    }
+    const progressEl = document.getElementById(`card-progress-ig-${shortId}`) || document.getElementById(`card-progress-${shortId}`);
+    const fill = document.getElementById(`card-fill-ig-${shortId}`) || document.getElementById(`card-fill-${shortId}`);
+    const num = document.getElementById(`card-num-ig-${shortId}`) || document.getElementById(`card-num-${shortId}`);
+    const txt = document.getElementById(`card-text-ig-${shortId}`) || document.getElementById(`card-text-${shortId}`);
+    const spinner = document.getElementById(`card-spinner-ig-${shortId}`) || document.getElementById(`card-spinner-${shortId}`);
+
+    if (progressEl) progressEl.classList.add('success');
+    if (fill) fill.style.width = '100%';
+    if (num) num.textContent = '100%';
+    if (txt) txt.textContent = text;
+    if (spinner) {
+      spinner.className = 'card-progress-spinner done';
+      spinner.textContent = '✓';
+    }
+
+    toast(`Successfully published Reel to @sicre.ator on Instagram!`, 'ok');
+
+    setTimeout(() => {
+      delete state.activeInstagramUploads[shortId];
+      refreshPublishQueue();
+      refreshOverview();
+      refreshLibrary();
+    }, 2400);
+  }
+
+  function handleInstagramCardUploadError(shortId, errorMsg) {
+    if (state.activeInstagramUploads && state.activeInstagramUploads[shortId]) {
+      state.activeInstagramUploads[shortId].status = 'error';
+      state.activeInstagramUploads[shortId].text = errorMsg;
+    }
+    const progressEl = document.getElementById(`card-progress-ig-${shortId}`) || document.getElementById(`card-progress-${shortId}`);
+    const txt = document.getElementById(`card-text-ig-${shortId}`) || document.getElementById(`card-text-${shortId}`);
+    const spinner = document.getElementById(`card-spinner-ig-${shortId}`) || document.getElementById(`card-spinner-${shortId}`);
+
+    if (progressEl) progressEl.classList.add('error');
+    if (txt) txt.textContent = errorMsg;
+    if (spinner) {
+      spinner.className = 'card-progress-spinner fail';
+      spinner.textContent = '✗';
+    }
+    toast(`Instagram publish failed: ${errorMsg}`, 'error');
+
+    setTimeout(() => {
+      delete state.activeInstagramUploads[shortId];
+      refreshPublishQueue();
+    }, 3200);
+  }
+
+  window.shortsAppOpenInstagramTerminal = function(shortId) {
+    if (state.activeInstagramUploads && state.activeInstagramUploads[shortId] && state.activeInstagramUploads[shortId].jobId) {
+      attachJobToPanel('run-publish', state.activeInstagramUploads[shortId].jobId);
+    }
+    openTerminalDrawer();
+  };
 
   function initAccountSwitcher() {
     const dropdown = document.getElementById('account-switch-dropdown');
@@ -4922,6 +5661,426 @@
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Post-Process Studio (Drag & Drop, Captions, Profanity Bleep)
+  // ─────────────────────────────────────────────────────────────
+  let postprocessState = {
+    file: null,
+    blobUrl: null,
+    jobId: null,
+    pollTimer: null,
+  };
+
+  function initPostprocessView() {
+    const dropzone = document.getElementById('postprocess-dropzone');
+    const fileInput = document.getElementById('postprocess-file-input');
+    const browseBtn = document.getElementById('postprocess-browse-btn');
+    const clearBtn = document.getElementById('postprocess-clear-file-btn');
+    const startBtn = document.getElementById('btn-postprocess-start');
+    const resetBtn = document.getElementById('postprocess-reset-btn');
+    const openTerminalBtn = document.getElementById('postprocess-open-terminal-btn');
+
+    if (!dropzone || dropzone.dataset.initialized) return;
+    dropzone.dataset.initialized = 'true';
+
+    // Drag and Drop listeners
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, () => {
+        dropzone.classList.add('drag-over');
+      }, false);
+    });
+
+    ['dragleave', 'dragend', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, () => {
+        dropzone.classList.remove('drag-over');
+      }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt ? dt.files : null;
+      if (files && files.length > 0) {
+        handlePostprocessFileSelected(files[0]);
+      }
+    });
+
+    if (browseBtn) {
+      browseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (fileInput) fileInput.click();
+      });
+    }
+
+    dropzone.addEventListener('click', (e) => {
+      // Only open file dialog if user clicks prompt area or dropzone itself
+      if (e.target.closest('#postprocess-preview-wrap')) return;
+      if (fileInput) fileInput.click();
+    });
+
+    if (fileInput) {
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files && fileInput.files.length > 0) {
+          handlePostprocessFileSelected(fileInput.files[0]);
+        }
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetPostprocessFileInput();
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        resetPostprocessFileInput();
+        const resultCard = document.getElementById('postprocess-result-card');
+        if (resultCard) resultCard.style.display = 'none';
+      });
+    }
+
+    if (openTerminalBtn) {
+      openTerminalBtn.addEventListener('click', () => {
+        openTerminalDrawer();
+      });
+    }
+
+    if (startBtn) {
+      startBtn.addEventListener('click', startPostprocessWorkflow);
+    }
+  }
+
+  function handlePostprocessFileSelected(file) {
+    if (!file) return;
+
+    // Check if video file
+    const ext = file.name.split('.').pop().toLowerCase();
+    const validExts = ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'];
+    if (!file.type.startsWith('video/') && !validExts.includes(ext)) {
+      toast('Please select a valid video file (.mp4, .mov, .mkv, .webm)', 'warn');
+      return;
+    }
+
+    postprocessState.file = file;
+
+    // Create object URL for instant preview
+    if (postprocessState.blobUrl) {
+      URL.revokeObjectURL(postprocessState.blobUrl);
+    }
+    postprocessState.blobUrl = URL.createObjectURL(file);
+
+    const videoPlayer = document.getElementById('postprocess-preview-video');
+    const promptWrap = document.getElementById('postprocess-dropzone-prompt');
+    const previewWrap = document.getElementById('postprocess-preview-wrap');
+    const nameEl = document.getElementById('postprocess-filename');
+    const sizeEl = document.getElementById('postprocess-filesize');
+    const statusChip = document.getElementById('postprocess-file-status');
+    const startBtn = document.getElementById('btn-postprocess-start');
+    const resultCard = document.getElementById('postprocess-result-card');
+
+    if (videoPlayer) videoPlayer.src = postprocessState.blobUrl;
+    if (nameEl) nameEl.textContent = file.name;
+    if (sizeEl) sizeEl.textContent = formatBytes(file.size);
+    if (statusChip) {
+      statusChip.textContent = 'Ready to process';
+      statusChip.className = 'chip chip-ok';
+    }
+
+    if (promptWrap) promptWrap.style.display = 'none';
+    if (previewWrap) previewWrap.style.display = 'flex';
+    if (startBtn) startBtn.disabled = false;
+    if (resultCard) resultCard.style.display = 'none';
+
+    toast(`Loaded ${file.name}`, 'info');
+  }
+
+  function resetPostprocessFileInput() {
+    if (postprocessState.blobUrl) {
+      URL.revokeObjectURL(postprocessState.blobUrl);
+      postprocessState.blobUrl = null;
+    }
+    postprocessState.file = null;
+
+    const fileInput = document.getElementById('postprocess-file-input');
+    if (fileInput) fileInput.value = '';
+
+    const videoPlayer = document.getElementById('postprocess-preview-video');
+    if (videoPlayer) {
+      videoPlayer.pause();
+      videoPlayer.src = '';
+    }
+
+    const promptWrap = document.getElementById('postprocess-dropzone-prompt');
+    const previewWrap = document.getElementById('postprocess-preview-wrap');
+    const statusChip = document.getElementById('postprocess-file-status');
+    const startBtn = document.getElementById('btn-postprocess-start');
+
+    if (promptWrap) promptWrap.style.display = 'flex';
+    if (previewWrap) previewWrap.style.display = 'none';
+    if (statusChip) {
+      statusChip.textContent = 'No video loaded';
+      statusChip.className = 'chip';
+    }
+    if (startBtn) startBtn.disabled = true;
+  }
+
+  async function startPostprocessWorkflow() {
+    const file = postprocessState.file;
+    if (!file) return;
+
+    const startBtn = document.getElementById('btn-postprocess-start');
+    const progressBox = document.getElementById('postprocess-progress-box');
+    const progressFill = document.getElementById('postprocess-progress-fill');
+    const statusText = document.getElementById('postprocess-progress-status');
+    const detailText = document.getElementById('postprocess-step-detail');
+    const resultCard = document.getElementById('postprocess-result-card');
+
+    if (startBtn) startBtn.disabled = true;
+    if (resultCard) resultCard.style.display = 'none';
+    if (progressBox) progressBox.style.display = 'block';
+    if (progressFill) progressFill.style.width = '10%';
+    if (statusText) statusText.textContent = 'Uploading video...';
+    if (detailText) detailText.textContent = `Uploading ${file.name} to server...`;
+
+    try {
+      // 1. Upload video file via chunked/streamed XHR with progress
+      const uploadResp = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/postprocess/upload?filename=${encodeURIComponent(file.name)}`, true);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 35);
+            if (progressFill) progressFill.style.width = `${Math.max(10, pct)}%`;
+            if (statusText) statusText.textContent = `Uploading video... (${Math.round((e.loaded / e.total) * 100)}%)`;
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (err) {
+              reject(new Error('Invalid response from server'));
+            }
+          } else {
+            let errMsg = `Upload failed with status ${xhr.status}`;
+            try {
+              const res = JSON.parse(xhr.responseText);
+              if (res.error) errMsg = res.error;
+            } catch (_) {}
+            reject(new Error(errMsg));
+          }
+        };
+
+        xhr.onerror = () => {
+          let msg = 'Network error during upload';
+          if (xhr.status) msg += ` (HTTP ${xhr.status})`;
+          reject(new Error(msg));
+        };
+        xhr.send(file);
+      });
+
+      if (!uploadResp || (!uploadResp.ok && !uploadResp.success)) {
+        throw new Error(uploadResp?.error || 'Upload was not successful');
+      }
+
+      const uploadedPath = uploadResp.file_path || uploadResp.filepath;
+      if (!uploadedPath) {
+        throw new Error('Server did not return a valid uploaded file path');
+      }
+
+      if (progressFill) progressFill.style.width = '40%';
+      if (statusText) statusText.textContent = 'Starting AI post-processing...';
+      if (detailText) detailText.textContent = 'Video uploaded successfully. Spawning Whisper pipeline...';
+
+      // 2. Options
+      const optCaptions = document.getElementById('opt-postprocess-captions');
+      const optBleep = document.getElementById('opt-postprocess-bleep');
+      const captions = optCaptions ? optCaptions.checked : true;
+      const bleep = optBleep ? optBleep.checked : false;
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[_.-]+/g, ' ').trim();
+
+      // 3. Trigger run
+      const runResp = await apiPost('/api/run', {
+        kind: 'postprocess',
+        options: {
+          video_path: uploadedPath,
+          captions: captions,
+          bleep_profanity: bleep,
+          title: cleanTitle,
+        }
+      });
+
+      const jobId = runResp?.id || runResp?.job_id;
+      if (!runResp || !jobId) {
+        throw new Error(runResp?.error || 'Failed to start post-processing job');
+      }
+
+      postprocessState.jobId = jobId;
+      pollPostprocessJob(jobId, {
+        title: cleanTitle,
+        captions: captions,
+        bleep: bleep,
+        originalFile: file.name
+      });
+
+    } catch (err) {
+      console.error('Postprocess error:', err);
+      if (statusText) statusText.textContent = 'Error during processing';
+      if (detailText) detailText.textContent = err.message || 'Unknown error occurred';
+      if (startBtn) startBtn.disabled = false;
+      toast(`Post-processing error: ${err.message}`, 'error');
+    }
+  }
+
+  function pollPostprocessJob(jobId, meta) {
+    if (postprocessState.pollTimer) {
+      clearTimeout(postprocessState.pollTimer);
+    }
+
+    let afterSeq = 0;
+    let accumulatedLogs = '';
+
+    const checkJob = async () => {
+      try {
+        const data = await apiGet(`/api/jobs/${jobId}/log?after=${afterSeq}`);
+        if (!data || !data.job) {
+          postprocessState.pollTimer = setTimeout(checkJob, 1500);
+          return;
+        }
+
+        const { job, lines } = data;
+        afterSeq = data.next_seq || afterSeq;
+
+        if (lines && lines.length > 0) {
+          const newText = lines.map(l => l.text || l.t || '').join('\n');
+          accumulatedLogs += '\n' + newText;
+
+          // Dynamically update stage detail text and progress bar based on logs
+          const progressFill = document.getElementById('postprocess-progress-fill');
+          const statusText = document.getElementById('postprocess-progress-status');
+          const detailText = document.getElementById('postprocess-step-detail');
+
+          if (/audio/i.test(newText) && progressFill) {
+            progressFill.style.width = '50%';
+            if (detailText) detailText.textContent = 'Extracting audio track & analyzing sample rates...';
+          }
+          if (/transcrib/i.test(newText) && progressFill) {
+            progressFill.style.width = '65%';
+            if (statusText) statusText.textContent = 'Transcribing with Whisper AI...';
+            if (detailText) detailText.textContent = 'Detecting speech timestamps and word boundaries...';
+          }
+          if (/profanity|swear|bleep/i.test(newText) && progressFill) {
+            progressFill.style.width = '80%';
+            if (statusText) statusText.textContent = 'Filtering audio & censor beeping...';
+            if (detailText) detailText.textContent = 'Applying 1000Hz censor bleep tones to swear words...';
+          }
+          if (/subtitles|karaoke|burning|ass/i.test(newText) && progressFill) {
+            progressFill.style.width = '90%';
+            if (statusText) statusText.textContent = 'Burning animated subtitles...';
+            if (detailText) detailText.textContent = 'Rendering synchronized karaoke ASS subtitles...';
+          }
+        }
+
+        if (job.status === 'done') {
+          handlePostprocessComplete(accumulatedLogs, meta);
+          return;
+        } else if (job.status === 'failed' || job.status === 'stopped') {
+          handlePostprocessFailed(job);
+          return;
+        }
+
+        postprocessState.pollTimer = setTimeout(checkJob, 1500);
+      } catch (err) {
+        console.warn('Poll error:', err);
+        postprocessState.pollTimer = setTimeout(checkJob, 2000);
+      }
+    };
+
+    checkJob();
+  }
+
+  function handlePostprocessComplete(allLogs, meta) {
+    const progressBox = document.getElementById('postprocess-progress-box');
+    const startBtn = document.getElementById('btn-postprocess-start');
+    const resultCard = document.getElementById('postprocess-result-card');
+    const resultVideo = document.getElementById('postprocess-result-video');
+    const resultTitle = document.getElementById('postprocess-result-title');
+    const resultPath = document.getElementById('postprocess-result-path');
+    const downloadBtn = document.getElementById('postprocess-download-btn');
+    const badgesWrap = document.getElementById('postprocess-result-badges');
+
+    // Parse [OK] OUTPUT_FILE: <path> from accumulated logs
+    let outFileName = '';
+    const match = allLogs.match(/\[OK\]\s*OUTPUT_FILE:\s*([^\r\n]+)/);
+    if (match && match[1]) {
+      const fullPath = match[1].trim();
+      outFileName = fullPath.split(/[/\\]/).pop();
+    }
+    if (!outFileName) {
+      // Fallback filename pattern
+      const stem = meta.originalFile.replace(/\.[^/.]+$/, '');
+      outFileName = `${stem}_postprocessed.mp4`;
+    }
+
+    const videoUrl = `/api/postprocess/video/${encodeURIComponent(outFileName)}`;
+    const downloadUrl = `/api/postprocess/video/${encodeURIComponent(outFileName)}?download=1`;
+    const cleanDisplayName = outFileName.replace(/^\d+_/, '');
+
+    if (resultVideo) {
+      resultVideo.src = videoUrl;
+      resultVideo.load();
+    }
+    if (resultTitle) resultTitle.textContent = meta.title || cleanDisplayName;
+    if (resultPath) resultPath.textContent = cleanDisplayName;
+    if (downloadBtn) {
+      downloadBtn.href = downloadUrl;
+      downloadBtn.download = cleanDisplayName;
+      downloadBtn.setAttribute('download', cleanDisplayName);
+    }
+
+    if (badgesWrap) {
+      badgesWrap.innerHTML = `
+        <span class="chip ${meta.captions ? 'chip-accent' : ''}">Captions: ${meta.captions ? 'Enabled' : 'Disabled'}</span>
+        <span class="chip ${meta.bleep ? 'chip-warn' : ''}">Profanity: ${meta.bleep ? 'Bleeped' : 'Original'}</span>
+      `;
+    }
+
+    if (progressBox) progressBox.style.display = 'none';
+    if (resultCard) resultCard.style.display = 'block';
+    if (startBtn) startBtn.disabled = false;
+
+    toast('Post-processing complete! Clip saved to Pending Uploads.', 'ok');
+
+    // Refresh pending upload queue counts in sidebar
+    refreshPublishQueue();
+    refreshOverview();
+  }
+
+  function handlePostprocessFailed(job) {
+    const progressFill = document.getElementById('postprocess-progress-fill');
+    const statusText = document.getElementById('postprocess-progress-status');
+    const detailText = document.getElementById('postprocess-step-detail');
+    const startBtn = document.getElementById('btn-postprocess-start');
+
+    if (progressFill) progressFill.style.width = '100%';
+    if (statusText) statusText.textContent = 'Post-processing failed';
+    if (detailText) detailText.textContent = 'Encountered an error. Click Live Logs to inspect details.';
+    if (startBtn) startBtn.disabled = false;
+
+    toast('Post-processing job failed. See terminal logs.', 'error');
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Initialization
   // ─────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
@@ -4930,11 +6089,13 @@
     initSidebarControls();
     initAccountSwitcher();
     initPublishAccountModal();
+    initInstagramModal();
     initAutoSchedulerModal();
     initVideoModals();
     initControls();
     initCreateModes();
     initLiveAgentListeners();
+    initPostprocessView();
     initTerminalDrawer();
     initSupabaseListeners();
     navigate();
