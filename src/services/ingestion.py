@@ -78,7 +78,7 @@ class IngestionService:
         return None
 
     def _build_ydl_base_opts(self) -> Dict[str, Any]:
-        """Construct robust yt-dlp options using Android player client to permanently bypass bot challenges."""
+        """Construct robust yt-dlp options using player clients to permanently bypass bot challenges and support post-live streams."""
         ffmpeg_dir = os.path.dirname(self.ffmpeg_path) if os.path.exists(self.ffmpeg_path) else self.ffmpeg_path
         opts: Dict[str, Any] = {
             "quiet": True,
@@ -86,7 +86,7 @@ class IngestionService:
             "ffmpeg_location": ffmpeg_dir,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android"]
+                    "player_client": ["android", "visionos", "web"]
                 }
             },
         }
@@ -120,7 +120,16 @@ class IngestionService:
                 info = ydl.extract_info(video_url, download=False)
         except Exception as e:
             err_str = str(e)
-            if "Sign in" in err_str or "bot" in err_str or "429" in err_str:
+            if "live event has ended" in err_str.lower() or "post-live" in err_str.lower():
+                log_warning("INGESTION", "Post-live manifestless stream detected ('live event has ended'). Retrying with visionos & web client...")
+                info_opts["extractor_args"] = {"youtube": {"player_client": ["visionos", "web"]}}
+                try:
+                    with yt_dlp.YoutubeDL(info_opts) as ydl:
+                        info = ydl.extract_info(video_url, download=False)
+                except Exception as retry_err:
+                    log_error("INGESTION", f"Failed to fetch video info after retry: {retry_err}")
+                    raise
+            elif "Sign in" in err_str or "bot" in err_str or "429" in err_str:
                 log_warning("INGESTION", "YouTube bot challenge encountered. Retrying with mobile player client...")
                 info_opts["extractor_args"] = {"youtube": {"player_client": ["android", "ios"]}}
                 try:
@@ -192,6 +201,8 @@ class IngestionService:
                     progress.update(task_id, description="[bold green]Download finished!")
 
             ydl_opts = self._build_ydl_base_opts()
+            if "extractor_args" in info_opts:
+                ydl_opts["extractor_args"] = info_opts["extractor_args"]
             ydl_opts.update({
                 "format": "bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4][height<=1080]/best[height<=1080]/best/18",
                 "outtmpl": outtmpl,
@@ -199,9 +210,19 @@ class IngestionService:
                 "progress_hooks": [ydl_hook],
             })
 
-            with progress:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([video_url])
+            try:
+                with progress:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([video_url])
+            except Exception as dl_err:
+                if "live event has ended" in str(dl_err).lower() or "post-live" in str(dl_err).lower():
+                    log_warning("INGESTION", "Post-live download failed on primary client. Retrying with visionos & web client...")
+                    ydl_opts["extractor_args"] = {"youtube": {"player_client": ["visionos", "web"]}}
+                    with progress:
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([video_url])
+                else:
+                    raise
 
             if not video_path.exists():
                 # In case extension merged as mkv or other

@@ -14,6 +14,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
+
+import requests
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -22,6 +25,22 @@ if str(ROOT) not in sys.path:
 from src.services.database import DatabaseService
 from src.services.instagram_publisher import InstagramPublisher, InstagramPublishError
 from src.console import log_error, log_info, log_success, log_warning
+
+
+def is_url_accessible(url: str, timeout: int = 5) -> bool:
+    """Check if an HTTP/HTTPS URL is live and returns 200 OK."""
+    if not url or not url.startswith("http") or "example.com" in url:
+        return False
+    try:
+        r = requests.head(url, timeout=timeout, allow_redirects=True)
+        if r.status_code == 200:
+            return True
+        if r.status_code in (403, 405):
+            r = requests.get(url, stream=True, timeout=timeout)
+            return r.status_code == 200
+        return False
+    except Exception:
+        return False
 
 
 def build_default_caption(hook_title: str, tags: Optional[str] = None) -> str:
@@ -79,7 +98,16 @@ def publish_short_to_instagram(
             except Exception as e:
                 log_warning("INSTAGRAM", f"Supabase lookup warning: {e}")
 
-        # Fallback to local SQLite if storage_url wasn't found or is placeholder
+        # Verify cloud storage URL is accessible and not deleted/404 (e.g. from wiped storage)
+        if resolved_video_source and resolved_video_source.startswith("http"):
+            if not is_url_accessible(resolved_video_source):
+                log_warning(
+                    "INSTAGRAM",
+                    f"Cloud storage URL is unreachable or deleted (404): {resolved_video_source}. Falling back to local disk...",
+                )
+                resolved_video_source = ""
+
+        # Fallback to local SQLite if storage_url wasn't found or is placeholder/unreachable
         if not resolved_video_source or resolved_video_source.startswith("https://example.com"):
             conn = db_service._get_connection()
             if conn:
@@ -91,16 +119,16 @@ def publish_short_to_instagram(
                         hook_title = hook_title or lrow[0] or ""
                         st_url = lrow[1] or ""
                         loc_p = lrow[2] or ""
-                        if st_url and not st_url.startswith("https://example.com"):
+                        if st_url and not st_url.startswith("https://example.com") and is_url_accessible(st_url):
                             resolved_video_source = st_url
-                        elif loc_p:
+                        elif loc_p and Path(loc_p).exists():
                             resolved_video_source = loc_p
                         tags = tags or (lrow[3] or "")
                     conn.close()
                 except Exception:
                     pass
 
-        # Additional local file search if unresolved or local file path
+        # Additional local file search if unresolved or local file path does not exist
         if not resolved_video_source or (not resolved_video_source.startswith("http") and not Path(resolved_video_source).exists()):
             item_dict = row or {"id": short_id, "hook_title": hook_title}
             found_local = db_service.find_local_video(item_dict)
@@ -155,13 +183,18 @@ def publish_short_to_instagram(
         # Update metadata in Supabase & SQLite if short_id is present
         if short_id:
             now_iso = datetime.now(timezone.utc).isoformat()
+            new_storage_url = result.get("video_url")
+            supabase_payload = {
+                "instagram_id": media_id,
+                "instagram_url": permalink,
+                "instagram_published_at": now_iso,
+            }
+            if new_storage_url and str(new_storage_url).startswith("http") and not str(new_storage_url).startswith("https://example.com"):
+                supabase_payload["storage_url"] = new_storage_url
+
             if db_service.client:
                 try:
-                    db_service.client.table("shorts_metadata").update({
-                        "instagram_id": media_id,
-                        "instagram_url": permalink,
-                        "instagram_published_at": now_iso,
-                    }).eq("id", short_id).execute()
+                    db_service.client.table("shorts_metadata").update(supabase_payload).eq("id", short_id).execute()
                 except Exception:
                     pass
 
@@ -183,10 +216,16 @@ def publish_short_to_instagram(
                     except Exception:
                         pass
 
-                    cursor.execute(
-                        "UPDATE shorts_metadata SET instagram_id = ?, instagram_url = ?, instagram_published_at = ? WHERE id = ?",
-                        (media_id, permalink, now_iso, short_id),
-                    )
+                    if new_storage_url and str(new_storage_url).startswith("http"):
+                        cursor.execute(
+                            "UPDATE shorts_metadata SET instagram_id = ?, instagram_url = ?, instagram_published_at = ?, storage_url = ? WHERE id = ?",
+                            (media_id, permalink, now_iso, new_storage_url, short_id),
+                        )
+                    else:
+                        cursor.execute(
+                            "UPDATE shorts_metadata SET instagram_id = ?, instagram_url = ?, instagram_published_at = ? WHERE id = ?",
+                            (media_id, permalink, now_iso, short_id),
+                        )
                     if cursor.rowcount == 0 and db_service.client:
                         sb_res = db_service.client.table("shorts_metadata").select("*").eq("id", short_id).execute()
                         if sb_res.data:
@@ -196,6 +235,8 @@ def publish_short_to_instagram(
                             row_data["instagram_id"] = media_id
                             row_data["instagram_url"] = permalink
                             row_data["instagram_published_at"] = now_iso
+                            if new_storage_url and str(new_storage_url).startswith("http"):
+                                row_data["storage_url"] = new_storage_url
                             keys = list(row_data.keys())
                             qmarks = ','.join(['?'] * len(keys))
                             cursor.execute(f"INSERT OR REPLACE INTO shorts_metadata ({','.join(keys)}) VALUES ({qmarks})", list(row_data.values()))

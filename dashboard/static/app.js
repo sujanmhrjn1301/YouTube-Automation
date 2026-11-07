@@ -89,6 +89,14 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  function getYouTubeVideoUrl(item) {
+    if (!item) return '#';
+    const yId = (item.youtubeId || item.youtube_id || '').trim();
+    if (!yId) return '#';
+    const isLong = item.isLongform || item.source === 'longform' || (item.duration && Number(item.duration) > 60);
+    return isLong ? `https://www.youtube.com/watch?v=${yId}` : `https://youtube.com/shorts/${yId}`;
+  }
+
   function formatTimeAgo(ts) {
     if (!ts) return '';
     const now = Date.now() / 1000;
@@ -630,7 +638,7 @@
                       <button type="button" class="btn btn-ghost btn-sm" data-drawer-id="${item.id}">Details</button>
                     </div>
                     ${item.youtubeId ? `
-                      <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn-youtube-subtle">
+                      <a href="${getYouTubeVideoUrl(item)}" target="_blank" class="btn-youtube-subtle">
                         <svg class="icon" style="width:14px; height:14px;"><use href="#i-youtube"/></svg>View on YouTube
                       </a>
                     ` : ''}
@@ -700,7 +708,7 @@
               <button type="button" class="btn btn-ghost btn-sm" data-drawer-id="${item.id}">Details</button>
             </div>
             ${item.youtubeId ? `
-              <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn-youtube-subtle">
+              <a href="${getYouTubeVideoUrl(item)}" target="_blank" class="btn-youtube-subtle">
                 <svg class="icon" style="width:14px; height:14px;"><use href="#i-youtube"/></svg>View on YouTube
               </a>
             ` : ''}
@@ -851,8 +859,8 @@
           </div>
           <p class="muted small" style="margin-top:6px;">Pre-uploaded to YouTube servers as Private. YouTube will automatically make it public at this time even if your computer is offline.</p>
           ${item.youtubeId ? `
-            <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn btn-ghost" style="margin-top:8px; align-self:flex-start;">
-              <svg class="icon"><use href="#i-youtube"/></svg>View Scheduled Short on YouTube
+            <a href="${getYouTubeVideoUrl(item)}" target="_blank" class="btn btn-ghost" style="margin-top:8px; align-self:flex-start;">
+              <svg class="icon"><use href="#i-youtube"/></svg>View Scheduled Video on YouTube
             </a>
           ` : ''}
         </div>
@@ -861,7 +869,7 @@
       ytHtml = `
         <div class="detail-section">
           <label>YouTube Link</label>
-          <a href="https://youtube.com/shorts/${escapeHtml(item.youtubeId)}" target="_blank" class="btn btn-primary" style="align-self:flex-start;">
+          <a href="${getYouTubeVideoUrl(item)}" target="_blank" class="btn btn-primary" style="align-self:flex-start;">
             <svg class="icon"><use href="#i-youtube"/></svg>View on YouTube
           </a>
         </div>
@@ -900,7 +908,7 @@
       `;
     }
 
-    let videoSrc = item.videoUrl || item.storageUrl || `/api/video?id=${item.id}`;
+    let videoSrc = item.videoUrl || `/api/video?id=${item.id}`;
     let videoPlayerHtml = `
       <div class="detail-section">
         <label>Video Player</label>
@@ -920,7 +928,7 @@
         <label>Properties</label>
         <div style="display:flex; flex-wrap:wrap; gap:8px;">
           ${renderSourceBadge(item.source)}
-          <span class="chip">Duration: ${formatDuration(item.duration)}</span>
+          <span class="chip" id="drawer-duration-badge">Duration: ${formatDuration(item.duration)}</span>
           <span class="chip">Part: ${item.part} of ${item.parts}</span>
           ${item.score ? `<span class="chip chip-ok">Viral Score: ${item.score}/10</span>` : ''}
           ${item.hasLocal ? '<span class="chip chip-quiet">Cached locally</span>' : '<span class="chip chip-quiet">Cloud only</span>'}
@@ -955,6 +963,20 @@
         </button>
       </div>
     `;
+
+    const drawerPlayer = document.getElementById('drawer-video-player');
+    if (drawerPlayer) {
+      drawerPlayer.addEventListener('loadedmetadata', () => {
+        if (drawerPlayer.duration && !isNaN(drawerPlayer.duration) && drawerPlayer.duration > 0) {
+          const formatted = formatDuration(drawerPlayer.duration);
+          const durBadge = document.getElementById('drawer-duration-badge');
+          if (durBadge) durBadge.textContent = `Duration: ${formatted}`;
+          const cardBadge = document.getElementById(`card-badge-${item.id}`);
+          if (cardBadge) cardBadge.textContent = formatted;
+          item.duration = drawerPlayer.duration;
+        }
+      });
+    }
 
     const drawerPub = document.getElementById('drawer-publish-btn');
     if (drawerPub) {
@@ -1539,7 +1561,7 @@
       ytBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (item.youtubeId) {
-          window.open(`https://youtube.com/shorts/${item.youtubeId}`, '_blank');
+          window.open(getYouTubeVideoUrl(item), '_blank');
           return;
         }
         openPublishAccountModal(shortId, item.title || `Short #${shortId}`);
@@ -1715,8 +1737,8 @@
 
         <!-- Preview with Play Button Overlay -->
         <div class="publish-card-preview" data-watch-id="${item.id}">
-          ${(item.storageUrl || item.videoUrl || item.hasLocal) ? `
-            <video src="${escapeHtml(item.storageUrl || item.videoUrl || `/api/video?id=${item.id}`)}" preload="metadata" muted playsinline></video>
+          ${(item.videoUrl || item.storageUrl || item.hasLocal) ? `
+            <video src="${escapeHtml(item.videoUrl || `/api/video?id=${item.id}`)}" preload="metadata" muted playsinline onloadedmetadata="if(this.duration){const b=document.getElementById('card-badge-${item.id}');if(b)b.textContent=formatDuration(this.duration);}"></video>
           ` : `
             <div class="preview-fallback">
               <svg class="icon" style="width:28px; height:28px;"><use href="#i-film"/></svg>
@@ -1727,7 +1749,7 @@
           <button class="publish-play-btn" data-watch-id="${item.id}" title="Watch video">
             <svg class="icon"><use href="#i-play"/></svg>
           </button>
-          <span class="publish-card-badge">${formatDuration(item.duration)}</span>
+          <span class="publish-card-badge" id="card-badge-${item.id}">${formatDuration(item.duration)}</span>
         </div>
 
         <!-- Body -->
@@ -1838,7 +1860,7 @@
         const shortId = parseInt(btn.dataset.publishId, 10);
         const item = (state.library || []).find(x => x.id === shortId);
         if (item && item.youtubeId) {
-          window.open(`https://youtube.com/shorts/${item.youtubeId}`, '_blank');
+          window.open(getYouTubeVideoUrl(item), '_blank');
           return;
         }
         openPublishAccountModal(shortId, item ? item.title : `Short #${shortId}`);
@@ -2004,12 +2026,96 @@
     }
   }
 
-  // Connect live character counter for custom prompt
+  function parseRuntimeFromPrompt(prompt) {
+    if (!prompt) return null;
+    const p = prompt.trim().toLowerCase();
+    const mHr = p.match(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|hr)\b/);
+    if (mHr) return Math.round(parseFloat(mHr[1]) * 3600);
+    const mMin = p.match(/\b(\d{1,3})\s*(?:minutes?|mins?|min)\b/);
+    if (mMin) {
+      const v = parseInt(mMin[1], 10);
+      if (v >= 1 && v <= 240) return v * 60;
+    }
+    const mShort = p.match(/\b(\d{1,3})\s*m\b(?!\w)/);
+    if (mShort) {
+      const v = parseInt(mShort[1], 10);
+      if (v >= 3 && v <= 180) return v * 60;
+    }
+    const mSec = p.match(/\b(\d{2,5})\s*(?:seconds?|secs?|s)\b/);
+    if (mSec) {
+      const v = parseInt(mSec[1], 10);
+      if (v >= 60 && v <= 14400) return v;
+    }
+    return null;
+  }
+
+  // Connect live character counter and prompt duration detection
   const customPromptEl = document.getElementById('custom-prompt-input');
   const customPromptCounterEl = document.getElementById('custom-prompt-counter');
+  const promptRuntimePill = document.getElementById('custom-prompt-runtime-pill');
+  const promptRuntimeText = document.getElementById('custom-prompt-runtime-text');
+  const longformDisplay = document.getElementById('longform-runtime-display');
+
   if (customPromptEl && customPromptCounterEl) {
     customPromptEl.addEventListener('input', () => {
       customPromptCounterEl.textContent = `${customPromptEl.value.length} / 300`;
+
+      // Live prompt duration parsing
+      const detectedSec = parseRuntimeFromPrompt(customPromptEl.value);
+      if (detectedSec) {
+        const dMins = Math.floor(detectedSec / 60);
+        const dSecs = detectedSec % 60;
+        const label = dSecs ? `${dMins}m ${dSecs}s (${detectedSec}s)` : `${dMins} Min (${detectedSec}s)`;
+        if (promptRuntimePill) promptRuntimePill.style.display = 'flex';
+        if (promptRuntimeText) promptRuntimeText.textContent = `Target Duration: ${label} detected from prompt`;
+        if (longformDisplay) longformDisplay.textContent = `${label} · Set from Prompt`;
+      } else {
+        if (promptRuntimePill) promptRuntimePill.style.display = 'none';
+        updateLongformRuntimeDisplay();
+      }
+    });
+  }
+
+  function updateLongformRuntimeDisplay() {
+    if (!longformDisplay) return;
+    const detectedSec = customPromptEl ? parseRuntimeFromPrompt(customPromptEl.value) : null;
+    if (detectedSec) {
+      const dMins = Math.floor(detectedSec / 60);
+      const dSecs = detectedSec % 60;
+      longformDisplay.textContent = `${dSecs ? `${dMins}m ${dSecs}s` : `${dMins} Min`} (${detectedSec}s) · Set from Prompt`;
+      return;
+    }
+    const segVal = getSegmentedValue('longform-runtime-selector');
+    if (segVal === 'custom') {
+      const customMins = parseInt(document.getElementById('longform-custom-runtime-mins')?.value || '25', 10);
+      longformDisplay.textContent = `${customMins} Min (${customMins * 60}s) · Custom`;
+    } else {
+      const sec = parseInt(segVal || '480', 10);
+      longformDisplay.textContent = `${Math.round(sec / 60)} Min (${sec}s)`;
+    }
+  }
+
+  // Longform runtime segmented buttons & custom minutes input
+  const longformRuntimeSelector = document.getElementById('longform-runtime-selector');
+  const longformCustomRow = document.getElementById('longform-custom-runtime-row');
+  const longformCustomMins = document.getElementById('longform-custom-runtime-mins');
+
+  if (longformRuntimeSelector) {
+    longformRuntimeSelector.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-value]');
+      if (!btn) return;
+      const isCustom = btn.dataset.value === 'custom';
+      if (longformCustomRow) longformCustomRow.style.display = isCustom ? 'flex' : 'none';
+      if (isCustom && longformCustomMins && !longformCustomMins.value) {
+        longformCustomMins.value = '25';
+      }
+      setTimeout(updateLongformRuntimeDisplay, 20);
+    });
+  }
+
+  if (longformCustomMins) {
+    longformCustomMins.addEventListener('input', () => {
+      updateLongformRuntimeDisplay();
     });
   }
 
@@ -2104,7 +2210,22 @@
           attachJobToPanel('run-process', job.id);
         } catch (err) { }
       } else if (state.createMode === 'longform') {
-        const targetRuntime = parseInt(getSegmentedValue('longform-runtime-selector') || '480', 10);
+        // Priority 1: Check prompt for duration directive (e.g. "make it 15 minutes", "20m")
+        const promptTarget = parseRuntimeFromPrompt(customPrompt);
+        let targetRuntime = 480;
+        if (promptTarget) {
+          targetRuntime = promptTarget;
+        } else {
+          // Priority 2: Segmented selector or custom minutes input
+          const segVal = getSegmentedValue('longform-runtime-selector');
+          if (segVal === 'custom') {
+            const customM = parseInt(document.getElementById('longform-custom-runtime-mins')?.value || '25', 10);
+            targetRuntime = Math.max(3, Math.min(180, isNaN(customM) ? 25 : customM)) * 60;
+          } else {
+            targetRuntime = parseInt(segVal || '480', 10);
+          }
+        }
+
         let focusTimestamp = 0.0;
         const focusInput = document.getElementById('longform-focus-ts');
         if (focusInput && focusInput.value.trim()) {
@@ -2129,7 +2250,8 @@
         };
         try {
           const job = await apiPost('/api/run', { kind: 'longform', options });
-          toast('7–9m Longform video editing started!', 'ok');
+          const runtimeMins = Math.round(targetRuntime / 60);
+          toast(`Longform video editing started (~${runtimeMins}m target)!`, 'ok');
           attachJobToPanel('run-process', job.id);
         } catch (err) { }
       } else if (state.createMode === 'montage') {
@@ -3241,9 +3363,18 @@
     if (delBtn) delBtn.style.display = isLongform ? 'none' : 'inline-flex';
     if (pubBtn) pubBtn.style.display = isLongform ? 'none' : 'inline-flex';
 
-    const videoSrc = item.videoSrc || item.videoUrl || item.storageUrl || `/api/video?id=${item.id}`;
+    const videoSrc = item.videoSrc || item.videoUrl || `/api/video?id=${item.id}`;
     player.src = videoSrc;
     player.currentTime = 0;
+    player.onloadedmetadata = () => {
+      if (player.duration && !isNaN(player.duration) && player.duration > 0) {
+        const formatted = formatDuration(player.duration);
+        if (duration) duration.textContent = formatted;
+        const cardBadge = document.getElementById(`card-badge-${item.id}`);
+        if (cardBadge) cardBadge.textContent = formatted;
+        item.duration = player.duration;
+      }
+    };
     backdrop.hidden = false;
     player.play().catch(() => { });
   }
@@ -3593,6 +3724,49 @@
       if (titleCount) titleCount.textContent = `${titleInput.value.length} / 100`;
     }
 
+    // Configure 16:9 Thumbnail Section (Active exclusively for Longform and Montage videos, hidden for Shorts)
+    const curItem = (state.items || []).find(x => x.id === shortId) || state.activeModalShort || {};
+    const isLongformOrMontage = (curItem.source === 'longform') ||
+                                (curItem.source === 'montage') ||
+                                (curItem.duration && curItem.duration > 180) ||
+                                (curItem.sourceTitle && curItem.sourceTitle.toLowerCase().includes('montage')) ||
+                                (shortTitle && (shortTitle.toLowerCase().includes('feature') || shortTitle.toLowerCase().includes('montage') || shortTitle.toLowerCase().includes('full story')));
+
+    const thumbSection = document.getElementById('account-publish-thumbnail-section');
+    const thumbPathInput = document.getElementById('account-publish-thumbnail-path');
+    const thumbImg = document.getElementById('publish-thumbnail-preview-img');
+    const thumbEmpty = document.getElementById('publish-thumbnail-empty-state');
+    const thumbClear = document.getElementById('publish-thumbnail-clear-btn');
+    const thumbPromptInput = document.getElementById('publish-thumbnail-prompt-input');
+
+    if (thumbSection) {
+      if (isLongformOrMontage) {
+        thumbSection.style.display = 'block';
+        if (thumbPromptInput) {
+          const cleanT = (shortTitle || '').replace(/[\[\(].*?[\]\)]/g, '').trim();
+          thumbPromptInput.value = cleanT ? `Cinematic high-contrast YouTube thumbnail for ${cleanT}` : '';
+        }
+        if (curItem.thumbnail_path || curItem.thumbnail_url) {
+          const tUrl = curItem.thumbnail_url || (curItem.thumbnail_path ? `/api/thumbnails/${curItem.thumbnail_path.split(/[\\/]/).pop()}` : '');
+          if (thumbImg && tUrl) {
+            thumbImg.src = tUrl;
+            thumbImg.style.display = 'block';
+            if (thumbEmpty) thumbEmpty.style.display = 'none';
+            if (thumbClear) thumbClear.style.display = 'flex';
+          }
+          if (thumbPathInput) thumbPathInput.value = curItem.thumbnail_path || '';
+        } else {
+          if (thumbImg) { thumbImg.src = ''; thumbImg.style.display = 'none'; }
+          if (thumbEmpty) thumbEmpty.style.display = 'flex';
+          if (thumbClear) thumbClear.style.display = 'none';
+          if (thumbPathInput) thumbPathInput.value = '';
+        }
+      } else {
+        thumbSection.style.display = 'none';
+        if (thumbPathInput) thumbPathInput.value = '';
+      }
+    }
+
     // Reset timing mode to "now"
     const btnNow = document.getElementById('timing-btn-now');
     const btnSchedule = document.getElementById('timing-btn-schedule');
@@ -3810,6 +3984,8 @@
 
     const rememberDefault = document.getElementById('account-publish-set-active')?.checked ?? true;
 
+    const thumbPath = document.getElementById('account-publish-thumbnail-path')?.value || '';
+
     closePublishAccountModal();
 
     if (rememberDefault && chosenId !== state.accounts?.active_id) {
@@ -3833,7 +4009,7 @@
       }
     }
 
-    startCardUpload(shortId, chosenAccount, publishAt, customTitle);
+    startCardUpload(shortId, chosenAccount, publishAt, customTitle, thumbPath);
   }
 
   function initStudioDateTimeInput() {
@@ -4124,6 +4300,49 @@
       });
     }
 
+    const btnBoostSeo = document.getElementById('btn-boost-seo');
+    const btnBoostSeoText = document.getElementById('btn-boost-seo-text');
+    if (btnBoostSeo) {
+      btnBoostSeo.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!pendingPublishShortId) return;
+
+        const curTitle = (titleInput ? titleInput.value : '').trim();
+        btnBoostSeo.disabled = true;
+        if (btnBoostSeoText) btnBoostSeoText.textContent = 'Boosting...';
+
+        const curItem = (state.items || []).find(x => x.id === pendingPublishShortId) || state.activeModalShort || {};
+        try {
+          const res = await apiPost('/api/seo/optimize', {
+            id: pendingPublishShortId,
+            title: curTitle,
+            duration: curItem.duration || null,
+            source_title: curItem.sourceTitle || curItem.source_title || null
+          });
+          if (res && res.success && res.title) {
+            if (titleInput) {
+              titleInput.value = res.title;
+              titleInput.dispatchEvent(new Event('input'));
+            }
+            const thumbPrompt = document.getElementById('publish-thumbnail-prompt-input');
+            if (thumbPrompt && !thumbPrompt.value.trim()) {
+              const cleanT = res.title.replace(/[\[\(].*?[\]\)]/g, '').replace(/#\w+/g, '').trim();
+              thumbPrompt.value = `Cinematic viral YouTube thumbnail for ${cleanT}`;
+            }
+            toast(`🚀 Boosted: "${res.title.substring(0, 36)}..." with ${res.tags ? res.tags.length : 12} SEO tags!`, 'ok');
+          } else {
+            toast('Could not optimize title', 'warn');
+          }
+        } catch (err) {
+          toast(`SEO Boost error: ${err.message}`, 'error');
+        } finally {
+          btnBoostSeo.disabled = false;
+          if (btnBoostSeoText) btnBoostSeoText.textContent = 'AI Boost SEO';
+        }
+      });
+    }
+
     // Release timing tabs: Now vs Schedule
     const btnNow = document.getElementById('timing-btn-now');
     const btnSchedule = document.getElementById('timing-btn-schedule');
@@ -4232,6 +4451,181 @@
         }
       });
     });
+
+    // Thumbnail handlers (Longform & Montage)
+    const btnGenThumb = document.getElementById('btn-generate-thumbnail');
+    const btnGenLabel = document.getElementById('btn-generate-thumb-label');
+    const thumbStatus = document.getElementById('publish-thumbnail-status');
+    const thumbPrompt = document.getElementById('publish-thumbnail-prompt-input');
+    const thumbStyle = document.getElementById('publish-thumbnail-style-select');
+    const thumbImg = document.getElementById('publish-thumbnail-preview-img');
+    const thumbEmpty = document.getElementById('publish-thumbnail-empty-state');
+    const thumbClear = document.getElementById('publish-thumbnail-clear-btn');
+    const thumbPathInput = document.getElementById('account-publish-thumbnail-path');
+    const thumbFileInput = document.getElementById('publish-thumbnail-file-input');
+    const thumbLeftBox = document.getElementById('publish-thumbnail-placeholder-left');
+    const btnKeyframe = document.getElementById('btn-extract-keyframe');
+
+    if (btnGenThumb) {
+      btnGenThumb.addEventListener('click', async () => {
+        if (!pendingPublishShortId) return;
+        const titleVal = (document.getElementById('account-publish-title-input')?.value || '').trim();
+        const promptVal = (thumbPrompt?.value || '').trim();
+        const styleVal = thumbStyle?.value || 'viral';
+
+        btnGenThumb.disabled = true;
+        if (btnGenLabel) btnGenLabel.textContent = 'Generating...';
+        if (thumbStatus) {
+          thumbStatus.style.display = 'block';
+          thumbStatus.textContent = '🎨 Generating 1280x720 with FLUX AI...';
+        }
+
+        try {
+          const res = await apiPost('/api/thumbnail/generate', {
+            id: pendingPublishShortId,
+            title: titleVal,
+            prompt: promptVal,
+            style: styleVal,
+            mode: 'ai'
+          });
+          if (res && res.success) {
+            if (thumbImg) {
+              thumbImg.src = `${res.thumbnail_url}?t=${Date.now()}`;
+              thumbImg.style.display = 'block';
+            }
+            if (thumbEmpty) thumbEmpty.style.display = 'none';
+            if (thumbClear) thumbClear.style.display = 'flex';
+            if (thumbPathInput) thumbPathInput.value = res.thumbnail_path;
+            toast('16:9 AI Thumbnail generated successfully!', 'ok');
+          } else {
+            toast(`Thumbnail error: ${res.error || 'Failed to generate'}`, 'error');
+          }
+        } catch (err) {
+          toast(`Thumbnail error: ${err.message}`, 'error');
+        } finally {
+          btnGenThumb.disabled = false;
+          if (btnGenLabel) btnGenLabel.textContent = 'Generate Thumbnail';
+          if (thumbStatus) thumbStatus.style.display = 'none';
+        }
+      });
+    }
+
+    if (btnKeyframe) {
+      btnKeyframe.addEventListener('click', async () => {
+        if (!pendingPublishShortId) return;
+        btnKeyframe.disabled = true;
+        if (thumbStatus) {
+          thumbStatus.style.display = 'block';
+          thumbStatus.textContent = '📸 Extracting video keyframe...';
+        }
+        try {
+          const res = await apiPost('/api/thumbnail/generate', {
+            id: pendingPublishShortId,
+            mode: 'frame',
+            timestamp: 10.0
+          });
+          if (res && res.success) {
+            if (thumbImg) {
+              thumbImg.src = `${res.thumbnail_url}?t=${Date.now()}`;
+              thumbImg.style.display = 'block';
+            }
+            if (thumbEmpty) thumbEmpty.style.display = 'none';
+            if (thumbClear) thumbClear.style.display = 'flex';
+            if (thumbPathInput) thumbPathInput.value = res.thumbnail_path;
+            toast('Video keyframe extracted!', 'ok');
+          } else {
+            toast(`Keyframe note: ${res.error || 'Could not extract frame'}`, 'error');
+          }
+        } catch (err) {
+          toast(`Keyframe error: ${err.message}`, 'error');
+        } finally {
+          btnKeyframe.disabled = false;
+          if (thumbStatus) thumbStatus.style.display = 'none';
+        }
+      });
+    }
+
+    if (thumbClear) {
+      thumbClear.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (thumbImg) { thumbImg.src = ''; thumbImg.style.display = 'none'; }
+        if (thumbEmpty) thumbEmpty.style.display = 'flex';
+        if (thumbClear) thumbClear.style.display = 'none';
+        if (thumbPathInput) thumbPathInput.value = '';
+      });
+    }
+
+    if (thumbLeftBox) {
+      thumbLeftBox.addEventListener('click', () => {
+        if (thumbFileInput) thumbFileInput.click();
+      });
+
+      thumbLeftBox.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        thumbLeftBox.style.borderColor = 'var(--accent)';
+      });
+      thumbLeftBox.addEventListener('dragleave', () => {
+        thumbLeftBox.style.borderColor = 'rgba(255,255,255,0.18)';
+      });
+      thumbLeftBox.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        thumbLeftBox.style.borderColor = 'rgba(255,255,255,0.18)';
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = async () => {
+            try {
+              const res = await apiPost('/api/thumbnail/upload', {
+                id: pendingPublishShortId,
+                data: reader.result
+              });
+              if (res && res.success) {
+                if (thumbImg) {
+                  thumbImg.src = `${res.thumbnail_url}?t=${Date.now()}`;
+                  thumbImg.style.display = 'block';
+                }
+                if (thumbEmpty) thumbEmpty.style.display = 'none';
+                if (thumbClear) thumbClear.style.display = 'flex';
+                if (thumbPathInput) thumbPathInput.value = res.thumbnail_path;
+                toast('Custom thumbnail loaded!', 'ok');
+              }
+            } catch (err) {
+              toast(`Upload error: ${err.message}`, 'error');
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    if (thumbFileInput) {
+      thumbFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const res = await apiPost('/api/thumbnail/upload', {
+              id: pendingPublishShortId,
+              data: reader.result
+            });
+            if (res && res.success) {
+              if (thumbImg) {
+                thumbImg.src = `${res.thumbnail_url}?t=${Date.now()}`;
+                thumbImg.style.display = 'block';
+              }
+              if (thumbEmpty) thumbEmpty.style.display = 'none';
+              if (thumbClear) thumbClear.style.display = 'flex';
+              if (thumbPathInput) thumbPathInput.value = res.thumbnail_path;
+              toast('Custom thumbnail loaded!', 'ok');
+            }
+          } catch (err) {
+            toast(`Upload error: ${err.message}`, 'error');
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
 
     initStudioDateTimeInput();
   }
@@ -4426,7 +4820,7 @@
     openTerminalDrawer();
   };
 
-  async function startCardUpload(shortId, account, publishAt = null, customTitle = null) {
+  async function startCardUpload(shortId, account, publishAt = null, customTitle = null, thumbnailPath = null) {
     state.activeUploads = state.activeUploads || {};
     const handleText = account.handle || account.name || '@YouTube';
     const isScheduled = !!publishAt;
@@ -4452,6 +4846,9 @@
       }
       if (customTitle) {
         options.title = customTitle;
+      }
+      if (thumbnailPath) {
+        options.thumbnail = thumbnailPath;
       }
       const job = await apiPost('/api/run', {
         kind: 'upload_single',

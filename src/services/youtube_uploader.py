@@ -138,6 +138,7 @@ class YouTubeUploaderService:
         clip: ViralClip,
         privacy_status: str = "public",
         publish_at: Optional[str] = None,
+        thumbnail_path: Optional[str] = None,
     ) -> Optional[str]:
         """
         Upload video to YouTube as a Short with chunked progress reporting.
@@ -164,17 +165,30 @@ class YouTubeUploaderService:
 
         youtube = build("youtube", "v3", credentials=creds)
 
-        # Title formatting: Ensure #Shorts is present for Shorts, preserve longform feature titles
-        title = clip.hook_title.strip()
-        is_longform = (clip.end_time - clip.start_time) > 180
-        if not is_longform:
-            if "#shorts" not in title.lower():
-                title = f"{title} #Shorts"
-            description = f"{clip.description}\n\n#Shorts #Viral #Trending"
-            tags = list(set(clip.tags + ["Shorts", "YouTubeShorts", "Viral"]))
-        else:
-            description = clip.description
-            tags = list(set(clip.tags + ["Highlights", "Longform", "Trending"]))
+        # Automated Algorithm & SEO Boosting for maximum Search & Browse CTR
+        from src.services.seo_booster import YouTubeSEOBooster
+        seo = YouTubeSEOBooster()
+        source_title_hint = getattr(clip, "source_title", "") or ""
+        duration_sec = (clip.end_time - clip.start_time) if (clip.end_time and clip.end_time > clip.start_time) else getattr(clip, "duration", 0.0)
+        if not duration_sec or duration_sec <= 0:
+            try:
+                from src.utils import get_video_duration
+                duration_sec = get_video_duration(video_path)
+            except Exception:
+                duration_sec = 60.0
+
+        enhanced = seo.enhance_metadata(
+            title=clip.hook_title,
+            duration=duration_sec,
+            source_title=source_title_hint,
+            existing_description=clip.description,
+            existing_tags=clip.tags,
+        )
+
+        title = enhanced["title"]
+        description = enhanced["description"]
+        tags = enhanced["tags"]
+        log_info("YOUTUBE_UPLOADER", f"🚀 Applied Algorithm SEO Boost: '{title}' ({len(tags)} search tags)")
 
         body: Dict = {
             "snippet": {
@@ -267,7 +281,22 @@ class YouTubeUploaderService:
         if confirmed:
             db_service.record_quota_usage(1600, is_upload=True)
             log_success("YOUTUBE_UPLOADER", f"✅ Upload Confirmed on YouTube! [{status_msg}]")
-            log_success("YOUTUBE_UPLOADER", f"Short successfully published! URL: {video_url}")
+
+            # Upload custom thumbnail if provided (for montage & longform videos)
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                try:
+                    log_info("YOUTUBE_UPLOADER", f"🖼️ Uploading custom 16:9 thumbnail to YouTube: {thumbnail_path}")
+                    mimetype = "image/png" if thumbnail_path.lower().endswith(".png") else "image/jpeg"
+                    thumb_media = MediaFileUpload(thumbnail_path, mimetype=mimetype, resumable=False)
+                    youtube.thumbnails().set(
+                        videoId=video_id,
+                        media_body=thumb_media,
+                    ).execute()
+                    log_success("YOUTUBE_UPLOADER", f"✅ Custom thumbnail successfully set for video: {video_id}")
+                except Exception as thumb_err:
+                    log_warning("YOUTUBE_UPLOADER", f"⚠️ Custom thumbnail upload note: {thumb_err}")
+
+            log_success("YOUTUBE_UPLOADER", f"Video successfully published! URL: {video_url}")
             return video_id
         else:
             log_error("YOUTUBE_UPLOADER", f"❌ YouTube reported an upload issue: {status_msg}")

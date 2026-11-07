@@ -21,7 +21,7 @@ def main() -> None:
         "--target-runtime",
         type=int,
         default=480,
-        help="Target video length in seconds (strictly between 420s / 7m and 540s / 9m). Default: 480 (8m)",
+        help="Target video length in seconds (e.g. 480 for 8m, 900 for 15m, 1200 for 20m). Default: 480 (8m)",
     )
     parser.add_argument(
         "--focus-timestamp",

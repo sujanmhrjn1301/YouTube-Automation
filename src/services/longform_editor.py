@@ -94,8 +94,8 @@ class LongformVideoEditor:
         - Act 5 (Aftermath & Outro): ~30-40s (Payoff, laughter, subscribe callout)
         Total sum target: target_runtime_sec (default 480s / 8 min).
         """
-        # Clamp target duration strictly to 7 - 9 minutes
-        target = max(420, min(540, int(target_runtime_sec)))
+        # Flexible target duration: from 180s (3m) up to 7200s (2h)
+        target = max(180, min(7200, int(target_runtime_sec)))
 
         # Clean topic from stream title
         theme = "THE EVENT"
@@ -248,8 +248,12 @@ class LongformVideoEditor:
                 downloaded_paths.append(out_file)
                 continue
 
+            seg_dur = max(10.0, end - start)
+            act_timeout = max(600, int(seg_dur * 4.0))
+
             cmd = [
                 "yt-dlp",
+                "--continue",
                 "--ffmpeg-location", self.ffmpeg_dir,
                 "--download-sections", f"*{start:.1f}-{end:.1f}",
                 "-f", "bestvideo[height<=1080]+bestaudio/bestvideo[height<=720]+bestaudio/best",
@@ -258,11 +262,12 @@ class LongformVideoEditor:
                 url
             ]
 
-            res = subprocess.run(cmd, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=180)
+            res = subprocess.run(cmd, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=act_timeout)
             if not out_file.exists() or out_file.stat().st_size < 10000:
                 # Try fallback format if visionos / default format selector fails
                 cmd_fallback = [
                     "yt-dlp",
+                    "--continue",
                     "--ffmpeg-location", self.ffmpeg_dir,
                     "--download-sections", f"*{start:.1f}-{end:.1f}",
                     "-f", "bestvideo+bestaudio/18/best",
@@ -270,7 +275,7 @@ class LongformVideoEditor:
                     "-o", str(out_file),
                     url
                 ]
-                res = subprocess.run(cmd_fallback, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=120)
+                res = subprocess.run(cmd_fallback, capture_output=True, text=True, env=self._get_ffmpeg_env(), timeout=act_timeout)
 
             if out_file.exists() and out_file.stat().st_size > 1000:
                 downloaded_paths.append(out_file)
@@ -447,7 +452,8 @@ class LongformVideoEditor:
         processed_files: List[Path],
         job_id: str,
         video_title: str,
-        progress_cb: Optional[Any] = None
+        progress_cb: Optional[Any] = None,
+        storyboard: Optional[List[Dict[str, Any]]] = None,
     ) -> Path:
         """Concatenate all acts, layer dynamic BGM and SFX with dialogue ducking, and master to -14 LUFS."""
         job_temp = self.temp_dir / job_id
@@ -462,6 +468,12 @@ class LongformVideoEditor:
             progress_cb("Assembling 7-9m Feature & Stitching Acts...", 0.8)
 
         # Stitch video
+        if storyboard:
+            total_dur_sec = sum(s.get("duration", 300) for s in storyboard)
+        else:
+            total_dur_sec = len(processed_files) * 300
+        concat_timeout = max(1800, int(total_dur_sec * 4.0))
+
         concat_cmd = [
             self.ffmpeg_path,
             "-y",
@@ -476,7 +488,7 @@ class LongformVideoEditor:
             "-b:a", "192k",
             str(raw_assembled)
         ]
-        subprocess.run(concat_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=600)
+        subprocess.run(concat_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=concat_timeout)
 
         # Preserving natural character voices and stream audio cleanly
         safe_title = "".join(c for c in video_title if c.isalnum() or c in (" ", "_", "-")).rstrip().replace(" ", "_")
@@ -486,6 +498,7 @@ class LongformVideoEditor:
         if progress_cb:
             progress_cb("Finalizing audio & video assembly...", 0.9)
 
+        master_timeout = max(1200, int(total_dur_sec * 3.5))
         master_cmd = [
             self.ffmpeg_path,
             "-y",
@@ -497,7 +510,7 @@ class LongformVideoEditor:
             str(final_video)
         ]
 
-        subprocess.run(master_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=600)
+        subprocess.run(master_cmd, capture_output=True, env=self._get_ffmpeg_env(), timeout=master_timeout)
 
         if not final_video.exists() or final_video.stat().st_size < 10000:
             final_video = raw_assembled
@@ -590,7 +603,18 @@ class LongformVideoEditor:
         except Exception:
             pass
 
-        log_stage(1, "Longform Video Editor Agent", f"Target: {target_runtime_sec}s (7-9m) | Stream: {url}")
+        # If prompt contains custom duration instruction (e.g. "make it 15 minutes"), honor it
+        if prompt:
+            from src.utils import parse_runtime_from_prompt
+            parsed_dur = parse_runtime_from_prompt(prompt)
+            if parsed_dur:
+                target_runtime_sec = parsed_dur
+                log_info("LONGFORM_EDITOR", f"🎯 Prompt duration directive detected: targeting {target_runtime_sec}s (~{target_runtime_sec // 60}m)")
+
+        mins = target_runtime_sec // 60
+        secs = target_runtime_sec % 60
+        dur_label = f"{mins}m {secs}s" if secs else f"{mins}m"
+        log_stage(1, "Longform Video Editor Agent", f"Target: {target_runtime_sec}s ({dur_label}) | Stream: {url}")
 
         if progress_cb:
             progress_cb("Probing Stream VOD Metadata & Audio Tracks...", 0.05)
@@ -634,7 +658,13 @@ class LongformVideoEditor:
         processed_files = self.apply_motion_graphics_and_cuts(segment_files, storyboard, job_id, progress_cb)
 
         # Assemble & Master
-        final_video = self.assemble_and_master(processed_files, job_id, stream_meta["title"], progress_cb)
+        final_video = self.assemble_and_master(
+            processed_files,
+            job_id,
+            stream_meta["title"],
+            progress_cb,
+            storyboard=storyboard,
+        )
 
         # Packaging Metadata
         metadata = self.generate_youtube_metadata(stream_meta, storyboard, final_video)

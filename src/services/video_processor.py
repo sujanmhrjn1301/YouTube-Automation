@@ -117,6 +117,7 @@ class VideoProcessorService:
             else:
                 cmd.extend(["-vf", filter_graph, "-map", "0:a?"])
 
+        temp_output_path = output_path.with_name(f"temp_render_{output_path.name}")
         cmd.extend([
             "-c:v", "libx264",
             "-preset", "fast",
@@ -125,7 +126,7 @@ class VideoProcessorService:
             "-b:a", "192k",
             "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
-            str(output_path),
+            str(temp_output_path),
         ])
 
         proc = subprocess.run(
@@ -137,8 +138,19 @@ class VideoProcessorService:
         )
 
         if proc.returncode != 0:
+            if temp_output_path.exists():
+                try:
+                    temp_output_path.unlink()
+                except Exception:
+                    pass
             log_error("VIDEO_PROCESSOR", f"FFmpeg failed with error:\n{proc.stderr}")
             raise RuntimeError(f"FFmpeg processing failed with exit code {proc.returncode}")
+
+        # Atomically rename to final output_path once fully rendered and finalized
+        if temp_output_path.exists():
+            if output_path.exists():
+                output_path.unlink()
+            temp_output_path.rename(output_path)
 
         return str(output_path)
 
@@ -150,6 +162,7 @@ class VideoProcessorService:
                 clean_p = str(sp.resolve()).replace("\\", "/")
                 f.write(f"file '{clean_p}'\n")
 
+        temp_out = output_path.with_name(f"temp_concat_{output_path.name}")
         cmd = [
             self.ffmpeg_path,
             "-y",
@@ -158,7 +171,7 @@ class VideoProcessorService:
             "-i", str(concat_list_file),
             "-c", "copy",
             "-movflags", "+faststart",
-            str(output_path),
+            str(temp_out),
         ]
 
         proc = subprocess.run(
@@ -175,8 +188,18 @@ class VideoProcessorService:
             pass
 
         if proc.returncode != 0:
+            if temp_out.exists():
+                try:
+                    temp_out.unlink()
+                except Exception:
+                    pass
             log_error("VIDEO_PROCESSOR", f"Concat failed: {proc.stderr}")
             raise RuntimeError(f"FFmpeg concat failed: {proc.stderr}")
+
+        if temp_out.exists():
+            if output_path.exists():
+                output_path.unlink()
+            temp_out.rename(output_path)
 
         return str(output_path)
 

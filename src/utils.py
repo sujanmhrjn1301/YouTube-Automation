@@ -31,6 +31,62 @@ def clean_standalone_short_title(title: str, fallback_label: str = "Viral Short"
     return f"{clean} #Shorts"
 
 
+def parse_runtime_from_prompt(prompt: Optional[str]) -> Optional[int]:
+    """
+    Intelligently extracts desired target video duration in seconds from user prompt.
+    Supports:
+      - 'make it 15 minutes', '12 mins video', '10 min', 'target duration 20 min'
+      - '15m', '20m', '30m'
+      - '1.5 hours', '1 hour', '2 hrs'
+      - '900 seconds', '600s'
+    Returns seconds as integer, or None if no duration directive found.
+    """
+    if not prompt or not isinstance(prompt, str):
+        return None
+    p = prompt.strip().lower()
+
+    # 1. Hours: e.g. "1.5 hours", "1 hour", "2 hrs"
+    m_hr = re.search(r'\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|hr)\b', p)
+    if m_hr:
+        try:
+            hrs = float(m_hr.group(1))
+            return int(round(hrs * 3600))
+        except Exception:
+            pass
+
+    # 2. Explicit Minutes: e.g. "make it 15 minutes", "15 mins", "12 min", "target 20 min"
+    m_min = re.search(r'\b(\d{1,3})\s*(?:minutes?|mins?|min)\b', p)
+    if m_min:
+        try:
+            val = int(m_min.group(1))
+            if 1 <= val <= 240:
+                return val * 60
+        except Exception:
+            pass
+
+    # 3. Compact 'm' notation: e.g. "15m", "20m", "12m", "make video 10m"
+    m_short = re.search(r'\b(\d{1,3})\s*m\b(?!\w)', p)
+    if m_short:
+        try:
+            val = int(m_short.group(1))
+            if 3 <= val <= 180:
+                return val * 60
+        except Exception:
+            pass
+
+    # 4. Seconds: e.g. "600s", "900 seconds"
+    m_sec = re.search(r'\b(\d{2,5})\s*(?:seconds?|secs?|s)\b', p)
+    if m_sec:
+        try:
+            val = int(m_sec.group(1))
+            if 60 <= val <= 14400:
+                return val
+        except Exception:
+            pass
+
+    return None
+
+
 def generate_short_filename(
     title: str,
     video_id: Optional[str] = None,
@@ -206,3 +262,59 @@ def auto_cleanup_expired_cache(max_age_days: int = 14) -> dict:
         "files_removed": total_removed,
         "mb_freed": round(total_bytes / (1024 * 1024), 2),
     }
+
+
+def has_moov_atom(video_path: Any) -> bool:
+    """
+    Fast, non-blocking check to verify an MP4/MOV container has a valid moov atom.
+    Prevents FFmpeg/OpenCV demuxer from emitting 'moov atom not found' on incomplete/corrupted files.
+    """
+    try:
+        from pathlib import Path
+        p = Path(video_path)
+        if not p.is_file():
+            return False
+        ext = p.suffix.lower()
+        if ext not in {".mp4", ".mov", ".m4v", ".3gp", ".m4a"}:
+            return True
+        size = p.stat().st_size
+        if size < 64:
+            return False
+        with open(p, "rb") as f:
+            head_size = min(size, 64 * 1024)
+            f.seek(0)
+            if b"moov" in f.read(head_size):
+                return True
+            tail_size = min(size, 512 * 1024)
+            f.seek(size - tail_size)
+            if b"moov" in f.read(tail_size):
+                return True
+            return False
+    except Exception:
+        return False
+
+
+def get_video_duration(video_path: Any) -> float:
+    """Extracts duration of a video file in seconds using ffmpeg."""
+    if not has_moov_atom(video_path):
+        return 0.0
+    import re
+    import subprocess
+    from src.config import settings
+    try:
+        ffmpeg_bin = getattr(settings, "FFMPEG_PATH", "ffmpeg")
+        res = subprocess.run(
+            [str(ffmpeg_bin), "-i", str(video_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", res.stderr)
+        if m:
+            h, m_val, s = map(float, m.groups())
+            return float(h * 3600 + m_val * 60 + s)
+    except Exception:
+        pass
+    return 60.0
+

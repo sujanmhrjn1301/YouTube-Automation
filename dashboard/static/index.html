@@ -205,6 +205,15 @@
         <path d="M19 3v4" />
         <path d="M21 5h-4" />
       </symbol>
+      <symbol id="i-image" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="9" cy="9" r="2" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24">
+        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="12" cy="13" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      </symbol>
     </defs>
   </svg>
 
@@ -604,13 +613,25 @@
             <!-- Longform Video Edit Controls (shown when mode=longform) -->
             <div id="create-longform-controls" style="display:none; flex-direction:column; gap:14px;">
               <div class="field">
-                <span class="field-label">Target Runtime (Strictly 7–9 Minutes)</span>
-                <div class="segmented" role="radiogroup" data-name="longform-runtime" id="longform-runtime-selector">
-                  <button type="button" role="radio" data-value="420" aria-checked="false">7 Min (420s)</button>
-                  <button type="button" role="radio" data-value="480" aria-checked="true">8 Min (480s) ·
-                    Recommended</button>
-                  <button type="button" role="radio" data-value="540" aria-checked="false">9 Min (540s)</button>
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+                  <span class="field-label" style="margin:0;">Target Runtime</span>
+                  <span class="chip chip-quiet" id="longform-runtime-display" style="font-size:11px;">8 Min (480s)</span>
                 </div>
+                <div class="segmented" role="radiogroup" data-name="longform-runtime" id="longform-runtime-selector" style="display:flex; flex-wrap:wrap; gap:4px;">
+                  <button type="button" role="radio" data-value="480" aria-checked="true">8 Min · Default</button>
+                  <button type="button" role="radio" data-value="600" aria-checked="false">10 Min</button>
+                  <button type="button" role="radio" data-value="720" aria-checked="false">12 Min</button>
+                  <button type="button" role="radio" data-value="900" aria-checked="false">15 Min</button>
+                  <button type="button" role="radio" data-value="1200" aria-checked="false">20 Min</button>
+                  <button type="button" role="radio" data-value="custom" aria-checked="false" id="longform-btn-custom-runtime">Custom / Prompt</button>
+                </div>
+                <div id="longform-custom-runtime-row" style="display:none; margin-top:8px; align-items:center; gap:8px;">
+                  <input type="number" id="longform-custom-runtime-mins" class="input" min="3" max="180" step="1" placeholder="e.g. 25" style="width:100px; padding:6px 10px; font-weight:600;">
+                  <span class="muted small">minutes (or simply type requested time in prompt below)</span>
+                </div>
+                <span class="field-hint" style="margin-top:6px; display:block;">
+                  💡 <strong>Prompt-Driven Timing:</strong> You can simply type any duration in your prompt below (e.g. <em>"make it 15 minutes"</em>, <em>"12 mins"</em>, or <em>"25 min video"</em>). The AI editor will automatically detect it!
+                </span>
               </div>
 
               <div class="field">
@@ -731,10 +752,15 @@
                   <span class="muted small" id="custom-prompt-counter">0 / 300</span>
                 </div>
                 <textarea id="custom-prompt-input" class="input" rows="2" maxlength="300"
-                  placeholder="e.g. Find when Speed jumps over chair, or anchor on 14:20 and 32:10; prioritize loud screams..."
+                  placeholder="e.g. Find when Speed jumps over chair, or anchor on 14:20 and 32:10; make it 15 minutes..."
                   style="resize:vertical; min-height:64px; font-family:var(--font-sans); line-height:1.5;"></textarea>
-                <span class="field-hint" id="custom-prompt-hint">Optional: Enter timestamps to hard-pin, or describe
-                  scenes for AI to find.</span>
+                <div id="custom-prompt-runtime-pill" style="display:none; margin-top:6px; align-items:center; gap:6px;">
+                  <span class="chip chip-ok" style="font-size:11px; padding:3px 10px; display:inline-flex; align-items:center; gap:6px;">
+                    <svg class="icon" style="width:13px; height:13px;"><use href="#i-clock"/></svg>
+                    <span id="custom-prompt-runtime-text">Target Duration: 15m (900s) detected from prompt</span>
+                  </span>
+                </div>
+                <span class="field-hint" id="custom-prompt-hint">Optional: Describe scenes, enter timestamps to pin, or specify duration (e.g. "make it 15 minutes").</span>
               </div>
 
               <div class="field" style="margin:0;">
@@ -1861,13 +1887,99 @@
           <div class="account-publish-col-left">
             <div class="account-publish-short-info">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span class="account-publish-subhead" style="margin:0;">YouTube Video Title</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="account-publish-subhead" style="margin:0;">YouTube Video Title</span>
+                  <button type="button" class="btn btn-ghost" id="btn-boost-seo"
+                    style="font-size:11px; padding:2px 8px; height:22px; color:#38bdf8; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.25); border-radius:12px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;"
+                    title="AI-boost title, tags & search snippet for YouTube algorithm">
+                    <svg class="icon" style="width:12px; height:12px;"><use href="#i-sparkles"/></svg>
+                    <span id="btn-boost-seo-text">AI Boost SEO</span>
+                  </button>
+                </div>
                 <span class="muted small" id="account-publish-title-count" style="font-size:11px;">0 / 100</span>
               </div>
               <div class="account-publish-title-wrap" style="position:relative;">
                 <input type="text" id="account-publish-title-input" class="input" maxlength="100" style="padding-left:12px; font-weight:600; font-size:13px; width:100%; border-radius:var(--radius-sm);" placeholder="Enter video title...">
                 <strong id="account-publish-short-title" style="display:none;">this Short</strong>
               </div>
+            </div>
+
+            <!-- Thumbnail Section (Longform & Montage Only) -->
+            <div id="account-publish-thumbnail-section" style="display:none; margin-top:12px; margin-bottom:12px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07); border-radius:var(--radius-md);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span class="account-publish-subhead" style="margin:0; display:flex; align-items:center; gap:6px;">
+                  <svg class="icon" style="width:13px; height:13px; color:var(--accent);"><use href="#i-image"/></svg>
+                  <span>16:9 Video Thumbnail</span>
+                </span>
+                <span class="chip chip-quiet" style="font-size:10px; padding:2px 6px;">Longform / Montage Only</span>
+              </div>
+
+              <!-- Two placeholders: Left for preview/putting thumbnail, Right for generating thumbnail -->
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <!-- Left Placeholder: Put / Preview Thumbnail -->
+                <div id="publish-thumbnail-placeholder-left"
+                  style="position:relative; width:100%; aspect-ratio:16/9; background:rgba(0,0,0,0.4); border:1px dashed rgba(255,255,255,0.18); border-radius:var(--radius-sm); overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;"
+                  title="Click to select custom image or view generated thumbnail">
+                  
+                  <!-- Empty state placeholder -->
+                  <div id="publish-thumbnail-empty-state" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:8px; text-align:center;">
+                    <svg class="icon" style="width:24px; height:24px; opacity:0.4; color:var(--text-secondary);"><use href="#i-image"/></svg>
+                    <span style="font-size:11px; font-weight:600; color:var(--text-secondary);">Thumbnail Placeholder</span>
+                    <span class="muted" style="font-size:9.5px; line-height:1.2;">Click or drag image here, or generate on right</span>
+                  </div>
+
+                  <!-- Loaded image preview (initially hidden) -->
+                  <img id="publish-thumbnail-preview-img" src="" alt="Thumbnail preview" style="display:none; width:100%; height:100%; object-fit:cover;">
+
+                  <!-- Quick Remove / Clear button on thumbnail -->
+                  <button type="button" id="publish-thumbnail-clear-btn" class="icon-btn" title="Remove thumbnail"
+                    style="display:none; position:absolute; top:4px; right:4px; width:22px; height:22px; background:rgba(0,0,0,0.7); border-radius:50%; padding:3px; z-index:2;">
+                    <svg class="icon" style="width:12px; height:12px;"><use href="#i-x"/></svg>
+                  </button>
+
+                  <input type="file" id="publish-thumbnail-file-input" accept="image/*" style="display:none;">
+                </div>
+
+                <!-- Right Placeholder: Generate Thumbnail with AI / Video Frame -->
+                <div id="publish-thumbnail-placeholder-right"
+                  style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-sm); padding:8px 10px; display:flex; flex-direction:column; justify-content:space-between; gap:6px;">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                      <span style="font-size:11px; font-weight:600; color:var(--text-primary);">AI Thumbnail Studio</span>
+                      <span class="badge badge-accent" style="font-size:9px; padding:1px 5px;">FLUX AI</span>
+                    </div>
+                    
+                    <input type="text" id="publish-thumbnail-prompt-input" class="input"
+                      placeholder="Prompt (auto-derived from title)..."
+                      style="font-size:11px; padding:5px 8px; width:100%; margin-bottom:6px; border-radius:var(--radius-xs);">
+
+                    <div style="display:flex; gap:4px; align-items:center;">
+                      <select id="publish-thumbnail-style-select" class="input" style="font-size:10px; padding:2px 4px; flex:1; height:24px;">
+                        <option value="viral" selected>Viral Shock &amp; Hype</option>
+                        <option value="dark">Spooky / Horror</option>
+                        <option value="gaming">Vibrant Gaming</option>
+                        <option value="cinematic">Cinematic Movie Still</option>
+                      </select>
+                      <button type="button" id="btn-extract-keyframe" class="btn btn-ghost btn-xs" style="font-size:10px; height:24px; padding:2px 6px;" title="Extract sharp frame from video">
+                        <svg class="icon" style="width:11px; height:11px;"><use href="#i-camera"/></svg>
+                        <span>Frame</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-generate-thumbnail"
+                      style="width:100%; font-size:11px; padding:6px 10px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">
+                      <svg class="icon" style="width:13px; height:13px;"><use href="#i-sparkles"/></svg>
+                      <span id="btn-generate-thumb-label">Generate Thumbnail</span>
+                    </button>
+                    <div id="publish-thumbnail-status" class="muted" style="display:none; font-size:10px; margin-top:3px; text-align:center;">
+                      🎨 Generating 1280x720 with FLUX AI...
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" id="account-publish-thumbnail-path" value="">
             </div>
 
             <!-- Beautified Dropdown Account Selector -->
@@ -2294,7 +2406,7 @@
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <script src="/app.js?v=82"></script>
+  <script src="/app.js?v=87"></script>
 </body>
 
 </html>

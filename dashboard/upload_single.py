@@ -44,7 +44,12 @@ from src.services.youtube_uploader import YouTubeUploaderService
 from src.utils import clean_standalone_short_title
 
 
-def upload_single_short(short_id: int, publish_at: Optional[str] = None, custom_title: Optional[str] = None) -> bool:
+def upload_single_short(
+    short_id: int,
+    publish_at: Optional[str] = None,
+    custom_title: Optional[str] = None,
+    thumbnail_path: Optional[str] = None,
+) -> bool:
     print_banner()
     schedule_text = f" (Scheduled: {publish_at})" if publish_at else ""
     log_stage(6, "Targeted Uploader", f"Publishing Short #{short_id} to YouTube{schedule_text}")
@@ -144,14 +149,20 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None, custom_
     else:
         tags_list = ["Shorts", "Viral"]
 
+    raw_score = float(item.get("hook_score") or 9.0)
+    if raw_score > 10.0:
+        raw_score = raw_score / 10.0
+    hook_score = int(round(max(1.0, min(10.0, raw_score))))
+
     clip_obj = ViralClip(
         start_time=float(item.get("start_time") or 0.0),
         end_time=float(item.get("end_time") or 50.0),
         hook_title=title,
-        hook_score=float(item.get("hook_score") or 90.0),
+        hook_score=hook_score,
         viral_reasoning=item.get("viral_reasoning") or "Direct dashboard single upload",
         description=item.get("description") or f"{title} #Shorts",
         tags=tags_list,
+        source_title=item.get("source_title") or "",
     )
 
     # 5. Check duplicate upload
@@ -180,10 +191,11 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None, custom_
     # 6. Perform Upload
     schedule_note = f" (Scheduled: {publish_at})" if publish_at else ""
     log_info("UPLOADER", f"Uploading to YouTube channel: {settings.YOUTUBE_TARGET_HANDLE}{schedule_note}...")
-    yt_id = uploader.upload_short(video_path=video_file_path, clip=clip_obj, publish_at=publish_at)
+    yt_id = uploader.upload_short(video_path=video_file_path, clip=clip_obj, publish_at=publish_at, thumbnail_path=thumbnail_path)
 
     if yt_id:
-        yt_url = f"https://www.youtube.com/shorts/{yt_id}"
+        is_long = float(item.get("duration") or 0.0) > 180 or source_vid == "feature"
+        yt_url = f"https://www.youtube.com/watch?v={yt_id}" if is_long else f"https://www.youtube.com/shorts/{yt_id}"
         db_service.mark_short_uploaded(short_id, source_vid, part_num, yt_id, scheduled_at=publish_at)
         if db_service.client:
             try:
@@ -193,6 +205,8 @@ def upload_single_short(short_id: int, publish_at: Optional[str] = None, custom_
                     "confirmed_at": datetime.now(timezone.utc).isoformat(),
                     "youtube_id": yt_id
                 }
+                if thumbnail_path:
+                    update_payload["thumbnail_path"] = thumbnail_path
                 if publish_at:
                     try:
                         db_service.client.table("shorts_metadata").update({**update_payload, "scheduled_publish_at": publish_at}).eq("id", short_id).execute()
@@ -217,9 +231,15 @@ def main():
     parser.add_argument("--id", type=int, required=True, help="Database ID of the short to upload")
     parser.add_argument("--publish-at", type=str, default=None, help="Scheduled release date/time in ISO-8601 format")
     parser.add_argument("--title", type=str, default="", help="Custom YouTube title")
+    parser.add_argument("--thumbnail", type=str, default=None, help="Path to 16:9 thumbnail image")
     args = parser.parse_args()
 
-    success = upload_single_short(args.id, publish_at=args.publish_at, custom_title=args.title)
+    success = upload_single_short(
+        args.id,
+        publish_at=args.publish_at,
+        custom_title=args.title,
+        thumbnail_path=args.thumbnail,
+    )
     sys.exit(0 if success else 1)
 
 

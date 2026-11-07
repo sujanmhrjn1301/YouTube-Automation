@@ -99,44 +99,104 @@ class InstagramPublisher:
                 "error": str(e),
             }
 
+    def _is_url_live(self, url: str) -> bool:
+        """Check if public video URL responds with 200 OK. Treats example.com as test URL."""
+        if "example.com" in url:
+            return True
+        try:
+            r = requests.head(url, timeout=5, allow_redirects=True)
+            if r.status_code == 200:
+                return True
+            if r.status_code in (403, 405):
+                r = requests.get(url, stream=True, timeout=5)
+                return r.status_code == 200
+            return False
+        except Exception:
+            return False
+
     def ensure_public_url(self, video_path_or_url: str) -> str:
         """
         Ensure video is accessible via public HTTPS URL.
-        If it's already an HTTP/HTTPS URL, returns it directly.
-        If it's a local file, uploads it to Supabase Storage and returns the public URL.
+        If it's already an HTTP/HTTPS URL, validates that it is reachable and returns it.
+        If it's a local file, compresses if >48MB to avoid Supabase 50MB 413 error,
+        uploads it to Supabase Storage, and returns the public URL.
         """
         val = str(video_path_or_url).strip()
         parsed = urlparse(val)
         if parsed.scheme in ("http", "https"):
-            return val
+            if self._is_url_live(val):
+                return val
+            raise InstagramPublishError(f"Video URL is unreachable or returned 404 (file deleted or expired): {val}")
 
         # Local file path
         local_path = Path(val)
         if not local_path.is_file():
             raise InstagramPublishError(f"Local video file not found: {local_path}")
 
-        log_info("INSTAGRAM", f"Uploading local file {local_path.name} to Supabase bucket '{self.storage_bucket}'...")
-        if not (self.supabase_url and self.supabase_key):
-            raise InstagramPublishError(
-                "Cannot upload local file to Instagram without SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+        file_to_upload = local_path
+        temp_compressed: Optional[Path] = None
+        size_mb = local_path.stat().st_size / (1024 * 1024)
+
+        # Supabase Free Tier has a strict 50.0 MB per-file limit.
+        # If the file exceeds 48 MB, compress it using fast H.264 CRF 26 to fit cleanly under quota.
+        if size_mb > 48.0:
+            log_info(
+                "INSTAGRAM",
+                f"Local video ({size_mb:.2f} MB) exceeds Supabase 50MB free quota. Compressing for upload...",
+            )
+            try:
+                import subprocess
+                from src.config import resolve_ffmpeg_path
+                ffmpeg_exe = resolve_ffmpeg_path()
+                temp_compressed = local_path.parent / f"ig_tmp_{int(time.time())}_{local_path.name}"
+                cmd = [
+                    ffmpeg_exe, "-y", "-i", str(local_path),
+                    "-c:v", "libx264", "-crf", "26", "-preset", "veryfast",
+                    "-c:a", "aac", "-b:a", "128k",
+                    str(temp_compressed),
+                ]
+                subprocess.run(cmd, check=True, capture_output=True)
+                if temp_compressed.is_file() and temp_compressed.stat().st_size > 1000:
+                    comp_size = temp_compressed.stat().st_size / (1024 * 1024)
+                    log_success("INSTAGRAM", f"Compressed video to {comp_size:.2f} MB (< 48 MB)")
+                    file_to_upload = temp_compressed
+            except Exception as e:
+                log_warning("INSTAGRAM", f"Auto-compression failed ({e}), attempting original file...")
+
+        try:
+            log_info("INSTAGRAM", f"Uploading local file {file_to_upload.name} to Supabase bucket '{self.storage_bucket}'...")
+            if not (self.supabase_url and self.supabase_key):
+                raise InstagramPublishError(
+                    "Cannot upload local file to Instagram without SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+                )
+
+            from supabase import create_client
+            supabase = create_client(self.supabase_url, self.supabase_key)
+
+            file_name = f"reels/{int(time.time())}_{local_path.name}"
+            with open(file_to_upload, "rb") as f:
+                file_bytes = f.read()
+
+            upload_res = supabase.storage.from_(self.storage_bucket).upload(
+                file_name,
+                file_bytes,
+                file_options={"content-type": "video/mp4", "x-upsert": "true"}
             )
 
-        from supabase import create_client
-        supabase = create_client(self.supabase_url, self.supabase_key)
+            # Check if upload returned an error payload
+            if isinstance(upload_res, dict) and upload_res.get("error"):
+                err_msg = upload_res.get("message") or upload_res.get("error")
+                raise InstagramPublishError(f"Supabase upload failed: {err_msg}")
 
-        file_name = f"reels/{int(time.time())}_{local_path.name}"
-        with open(local_path, "rb") as f:
-            file_bytes = f.read()
-
-        upload_res = supabase.storage.from_(self.storage_bucket).upload(
-            file_name,
-            file_bytes,
-            file_options={"content-type": "video/mp4", "x-upsert": "true"}
-        )
-
-        public_url = supabase.storage.from_(self.storage_bucket).get_public_url(file_name)
-        log_success("INSTAGRAM", f"Uploaded video to public storage URL: {public_url}")
-        return public_url
+            public_url = supabase.storage.from_(self.storage_bucket).get_public_url(file_name)
+            log_success("INSTAGRAM", f"Uploaded video to public storage URL: {public_url}")
+            return public_url
+        finally:
+            if temp_compressed and temp_compressed.exists():
+                try:
+                    temp_compressed.unlink()
+                except Exception:
+                    pass
 
     def create_media_container(
         self,

@@ -32,9 +32,28 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+from src.config import settings
+from src.utils import has_moov_atom
 DB_PATH = ROOT / "output" / "shorts.db"
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("DASHBOARD_PORT", "8765"))
+
+
+def _db_read() -> Optional[sqlite3.Connection]:
+    if not DB_PATH.exists():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH.resolve()}?mode=ro", uri=True, timeout=5.0)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception:
+        try:
+            conn = sqlite3.connect(DB_PATH, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+            return conn
+        except Exception:
+            return None
+
 
 ACCOUNTS_FILE = ROOT / "dashboard" / "accounts.json"
 TOKENS_DIR = ROOT / "tokens"
@@ -179,7 +198,7 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
         if not URL_RE.match(url):
             raise ValueError("Enter a valid YouTube video URL.")
         argv = [py, "cli.py", "--url", url]
-        argv += ["--clips-count", str(_clamp_int(opts.get("clips"), 1, 10, 3))]
+        argv += ["--clips-count", str(_clamp_int(opts.get("clips"), 1, 20, 3))]
         crop = opts.get("crop", "blurred_background")
         if crop in CROP_MODES:
             argv += ["--crop-mode", crop]
@@ -235,12 +254,22 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
         if not URL_RE.match(url):
             raise ValueError("Enter a valid YouTube livestream or video URL.")
         argv = [py, "edit_longform.py", "--url", url]
-        if opts.get("targetRuntime"):
-            argv += ["--target-runtime", str(_clamp_int(opts.get("targetRuntime"), 420, 540, 480))]
+        prompt_str = str(opts.get("prompt", "")).strip()
+        from src.utils import parse_runtime_from_prompt
+        parsed_target = parse_runtime_from_prompt(prompt_str) if prompt_str else None
+
+        if parsed_target:
+            target_runtime = parsed_target
+        elif opts.get("targetRuntime"):
+            target_runtime = _clamp_int(opts.get("targetRuntime"), 180, 7200, 480)
+        else:
+            target_runtime = 480
+
+        argv += ["--target-runtime", str(target_runtime)]
         if opts.get("focusTimestamp"):
             argv += ["--focus-timestamp", str(opts.get("focusTimestamp"))]
-        if opts.get("prompt"):
-            argv += ["--prompt", str(opts["prompt"]).strip()]
+        if prompt_str:
+            argv += ["--prompt", prompt_str]
         if opts.get("searchEngine"):
             argv += ["--search-engine", str(opts["searchEngine"]).strip()]
         return argv
@@ -278,6 +307,8 @@ def build_command(kind: str, opts: Dict[str, Any]) -> List[str]:
             cmd.extend(["--publish-at", str(opts["publish_at"])])
         if opts.get("title"):
             cmd.extend(["--title", str(opts["title"]).strip()])
+        if opts.get("thumbnail"):
+            cmd.extend(["--thumbnail", str(opts["thumbnail"]).strip()])
         return cmd
     if kind == "upload_all":
         return [py, "cli.py", "--upload-all-pending"]
@@ -341,7 +372,7 @@ class Job:
         self.lines: List[Dict[str, Any]] = []
         self.stages: List[Dict[str, Any]] = []
         self.clips_done = 0
-        self.clips_total = _clamp_int(opts.get("clips"), 1, 10, 0)
+        self.clips_total = _clamp_int(opts.get("clips"), 1, 20, 0)
         self.current_clip = 1
         self.status = "running"
         self.exit_code: Optional[int] = None
@@ -535,6 +566,12 @@ def _db_write() -> Optional[sqlite3.Connection]:
 
 def probe_local_video_duration(video_path: Path) -> float:
     try:
+        from src.utils import has_moov_atom
+        if not has_moov_atom(video_path):
+            return 0.0
+    except Exception:
+        pass
+    try:
         import cv2
         cap = cv2.VideoCapture(str(video_path))
         if cap.isOpened():
@@ -587,6 +624,7 @@ def sync_local_disk_videos_to_library() -> None:
             or name_lower.startswith("cloud_")
             or name_lower.startswith("source_")
             or f.stat().st_size < 10000
+            or not has_moov_atom(f)
             or (time.time() - f.stat().st_mtime) < 45  # Skip files being actively rendered/written
         ):
             continue
@@ -796,12 +834,12 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
 
         # Locate local file on disk
         local_file: Optional[Path] = None
-        if local and Path(local).is_file():
+        if local and Path(local).is_file() and has_moov_atom(Path(local)):
             local_file = Path(local)
         elif db_service:
             try:
                 found = db_service.find_local_video(d)
-                if found and found.is_file():
+                if found and found.is_file() and has_moov_atom(found):
                     local_file = found
                     local = str(found)
             except Exception:
@@ -815,6 +853,15 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
         local_str = str(local).replace("\\", "/").lower()
         title_str = str(d.get("hook_title") or "").lower()
         duration_val = float(d.get("duration") or 0.0)
+
+        # Synchronize duration with the exact physical video file duration
+        if has_local:
+            try:
+                real_dur = probe_local_video_duration(local_file)
+                if real_dur > 0:
+                    duration_val = real_dur
+            except Exception:
+                pass
 
         if (
             duration_val > 180
@@ -859,7 +906,7 @@ def get_library(limit: int = 200) -> List[Dict[str, Any]]:
             "title": d.get("hook_title") or "Untitled",
             "sourceTitle": d.get("source_title") or "",
             "sourceUrl": d.get("source_url") or "",
-            "duration": d.get("duration"),
+            "duration": duration_val,
             "part": d.get("part_number") or 1,
             "parts": d.get("total_parts") or 1,
             "score": d.get("hook_score"),
@@ -1367,6 +1414,22 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json({"configured": False, "connected": False, "error": str(e)})
 
+        m_thumb = re.fullmatch(r"/api/thumbnails/([a-zA-Z0-9_\-\.]+\.(?:jpg|jpeg|png|webp))", path)
+        if m_thumb:
+            thumb_name = m_thumb.group(1)
+            thumb_file = (settings.OUTPUT_DIR / "thumbnails" / thumb_name).resolve()
+            if not thumb_file.is_file():
+                return self._json({"error": "thumbnail not found"}, 404)
+            data = thumb_file.read_bytes()
+            ctype = "image/png" if thumb_name.lower().endswith(".png") else "image/jpeg"
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "public, max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         # Static files
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
         target = (STATIC_DIR / rel).resolve()
@@ -1412,6 +1475,118 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
             return self._json({"success": True, "id": short_id, "title": new_title})
+
+        if path == "/api/thumbnail/generate":
+            body = self._read_json()
+            short_id = _clamp_int(body.get("id"), 0, 10**9, 0)
+            title = str(body.get("title") or "").strip()
+            prompt = str(body.get("prompt") or "").strip()
+            style = str(body.get("style") or "viral").strip()
+            mode = str(body.get("mode") or "ai").strip()
+
+            from src.services.thumbnail_generator import ThumbnailGeneratorService
+            service = ThumbnailGeneratorService()
+
+            if mode == "frame":
+                video_path = None
+                conn = _db_read()
+                row_dict = {}
+                if conn and short_id:
+                    try:
+                        row = conn.execute("SELECT * FROM shorts_metadata WHERE id = ?", (short_id,)).fetchone()
+                        if row:
+                            row_dict = dict(row)
+                    finally:
+                        conn.close()
+
+                if row_dict:
+                    try:
+                        from src.services.database import DatabaseService
+                        db_serv = DatabaseService()
+                        found = db_serv.find_local_video(row_dict)
+                        if found and found.is_file():
+                            video_path = str(found)
+                    except Exception:
+                        pass
+                if not video_path and row_dict.get("local_path"):
+                    lp = Path(row_dict["local_path"])
+                    if lp.is_file():
+                        video_path = str(lp)
+
+                if not video_path:
+                    return self._json({"error": "Local video file not found to extract frame"}, 404)
+
+                ts = float(body.get("timestamp") or 10.0)
+                res = service.extract_video_frame(video_path, timestamp_sec=ts, short_id=short_id)
+                return self._json(res)
+            else:
+                res = service.generate_ai_thumbnail(title=title, custom_prompt=prompt, style=style, short_id=short_id)
+                return self._json(res)
+
+        if path == "/api/thumbnail/upload":
+            body = self._read_json()
+            short_id = _clamp_int(body.get("id"), 0, 10**9, 0)
+            data_url = str(body.get("data") or "")
+            if not data_url or "," not in data_url:
+                return self._json({"error": "Invalid base64 image data"}, 400)
+            import base64
+            header, b64_str = data_url.split(",", 1)
+            raw_bytes = base64.b64decode(b64_str)
+            ext = "png" if "png" in header else "jpg"
+            thumb_dir = settings.OUTPUT_DIR / "thumbnails"
+            thumb_dir.mkdir(parents=True, exist_ok=True)
+            fname = f"thumb_custom_{short_id}_{int(time.time())}.{ext}"
+            fpath = thumb_dir / fname
+            with open(fpath, "wb") as f:
+                f.write(raw_bytes)
+            return self._json({
+                "success": True,
+                "thumbnail_path": str(fpath.resolve()),
+                "thumbnail_url": f"/api/thumbnails/{fname}",
+                "filename": fname,
+                "mode": "custom"
+            })
+
+        if path == "/api/seo/optimize":
+            body = self._read_json()
+            short_id = _clamp_int(body.get("id"), 0, 10**9, 0)
+            raw_title = str(body.get("title") or "").strip()
+
+            source_title = ""
+            duration = 45.0
+            conn = _db_read()
+            if conn and short_id:
+                try:
+                    row = conn.execute("SELECT * FROM shorts_metadata WHERE id = ?", (short_id,)).fetchone()
+                    if row:
+                        row_dict = dict(row)
+                        source_title = row_dict.get("source_title") or ""
+                        try:
+                            duration = float(row_dict.get("duration") or 45.0)
+                        except (ValueError, TypeError):
+                            duration = 45.0
+                        if not raw_title:
+                            raw_title = row_dict.get("hook_title") or ""
+                finally:
+                    conn.close()
+
+            if body.get("duration"):
+                try:
+                    duration = float(body.get("duration"))
+                except (ValueError, TypeError):
+                    pass
+            if body.get("source_title"):
+                source_title = str(body.get("source_title"))
+
+            from src.services.seo_booster import YouTubeSEOBooster
+            booster = YouTubeSEOBooster()
+            res = booster.enhance_metadata(
+                title=raw_title,
+                duration=duration,
+                source_title=source_title,
+            )
+            return self._json({"success": True, **res})
+
         if path == "/api/instagram/publish":
             body = self._read_json()
             short_id = str(body.get("id", "")).strip()

@@ -182,6 +182,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             clean_ass_path = clean_ass_path.replace(":", r"\:")
 
         log_info("SUBTITLER", f"Burning subtitles using FFmpeg libass filter...")
+        temp_out = output_path.with_name(f"temp_sub_{output_path.name}")
         cmd = [
             self.ffmpeg_path,
             "-y",
@@ -192,7 +193,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             "-crf", "18",
             "-c:a", "copy",
             "-movflags", "+faststart",
-            str(output_path),
+            str(temp_out),
         ]
 
         start_t = time.time()
@@ -205,9 +206,19 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
 
         if proc.returncode != 0:
+            if temp_out.exists():
+                try:
+                    temp_out.unlink()
+                except Exception:
+                    pass
             log_error("SUBTITLER", f"Subtitles burn-in error: {proc.stderr}")
             # Fallback to copy if ass filter encounters system font issue
             raise RuntimeError(f"FFmpeg subtitle burn failed with exit code {proc.returncode}")
+
+        if temp_out.exists():
+            if output_path.exists():
+                output_path.unlink()
+            temp_out.rename(output_path)
 
         elapsed = time.time() - start_t
         filesize_mb = output_path.stat().st_size / (1024 * 1024)

@@ -138,39 +138,43 @@ class DatabaseService:
         Returns the existing YouTube video ID if found, else None.
         """
         # 1. Local SQLite database check
+        generic_sources = {"feature", "local_clip", "unknown", "upload", ""}
+        is_generic = not source_video_id or str(source_video_id).strip().lower() in generic_sources
+
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            # Check timestamp overlap (< 2.0s tolerance) on the same source video
-            cursor.execute("""
-                SELECT youtube_id, hook_title FROM shorts_metadata
-                WHERE source_video_id = ?
-                  AND ABS(start_time - ?) < 2.0
-                  AND ABS(end_time - ?) < 2.0
-                  AND youtube_id IS NOT NULL AND youtube_id != ''
-                ORDER BY id DESC LIMIT 1
-            """, (source_video_id, start_time, end_time))
-            row = cursor.fetchone()
-            if row and row[0]:
-                conn.close()
-                return str(row[0]).strip()
+            # Check timestamp overlap (< 2.0s tolerance) ONLY on specific real YouTube stream IDs
+            if not is_generic:
+                cursor.execute("""
+                    SELECT youtube_id, hook_title FROM shorts_metadata
+                    WHERE source_video_id = ?
+                      AND ABS(start_time - ?) < 2.0
+                      AND ABS(end_time - ?) < 2.0
+                      AND youtube_id IS NOT NULL AND youtube_id != ''
+                    ORDER BY id DESC LIMIT 1
+                """, (source_video_id, start_time, end_time))
+                row = cursor.fetchone()
+                if row and row[0]:
+                    conn.close()
+                    return str(row[0]).strip()
 
             # Check title match if provided
             if title:
-                # Strip #shorts for comparison
-                norm_title = title.replace("#Shorts", "").replace("#shorts", "").strip().lower()
-                cursor.execute("""
-                    SELECT youtube_id, hook_title FROM shorts_metadata
-                    WHERE youtube_id IS NOT NULL AND youtube_id != ''
-                    ORDER BY id DESC
-                """)
-                for y_id, h_title in cursor.fetchall():
-                    if h_title:
-                        existing_norm = h_title.replace("#Shorts", "").replace("#shorts", "").strip().lower()
-                        if existing_norm == norm_title:
-                            conn.close()
-                            return str(y_id).strip()
+                norm_title = re.sub(r"[^a-zA-Z0-9]", "", title.lower().replace("shorts", ""))
+                if norm_title and len(norm_title) >= 8:
+                    cursor.execute("""
+                        SELECT youtube_id, hook_title FROM shorts_metadata
+                        WHERE youtube_id IS NOT NULL AND youtube_id != ''
+                        ORDER BY id DESC
+                    """)
+                    for y_id, h_title in cursor.fetchall():
+                        if h_title:
+                            existing_norm = re.sub(r"[^a-zA-Z0-9]", "", h_title.lower().replace("shorts", ""))
+                            if existing_norm == norm_title:
+                                conn.close()
+                                return str(y_id).strip()
 
             conn.close()
         except Exception as e:
@@ -179,27 +183,36 @@ class DatabaseService:
         # 2. Supabase Cloud DB check (if connected)
         if self.client:
             try:
-                res = self.client.table("shorts_metadata") \
-                    .select("youtube_id, hook_title, start_time, end_time") \
-                    .eq("source_video_id", source_video_id) \
-                    .neq("youtube_id", "") \
-                    .execute()
-                if res.data:
-                    for item in res.data:
-                        yt_id = item.get("youtube_id")
-                        if not yt_id:
-                            continue
-                        st = float(item.get("start_time", 0.0))
-                        et = float(item.get("end_time", 0.0))
-                        if abs(st - start_time) < 2.0 and abs(et - end_time) < 2.0:
-                            return str(yt_id).strip()
-
-                        if title:
-                            h_title = item.get("hook_title", "")
-                            norm_t1 = title.replace("#Shorts", "").replace("#shorts", "").strip().lower()
-                            norm_t2 = h_title.replace("#Shorts", "").replace("#shorts", "").strip().lower()
-                            if norm_t1 == norm_t2:
+                if not is_generic:
+                    res = self.client.table("shorts_metadata") \
+                        .select("youtube_id, hook_title, start_time, end_time") \
+                        .eq("source_video_id", source_video_id) \
+                        .neq("youtube_id", "") \
+                        .execute()
+                    if res.data:
+                        for item in res.data:
+                            yt_id = item.get("youtube_id")
+                            if not yt_id:
+                                continue
+                            st = float(item.get("start_time", 0.0))
+                            et = float(item.get("end_time", 0.0))
+                            if abs(st - start_time) < 2.0 and abs(et - end_time) < 2.0:
                                 return str(yt_id).strip()
+
+                if title:
+                    norm_t1 = re.sub(r"[^a-zA-Z0-9]", "", title.lower().replace("shorts", ""))
+                    if norm_t1 and len(norm_t1) >= 8:
+                        res_titles = self.client.table("shorts_metadata") \
+                            .select("youtube_id, hook_title") \
+                            .neq("youtube_id", "") \
+                            .execute()
+                        if res_titles.data:
+                            for item in res_titles.data:
+                                yt_id = item.get("youtube_id")
+                                h_title = item.get("hook_title", "")
+                                norm_t2 = re.sub(r"[^a-zA-Z0-9]", "", h_title.lower().replace("shorts", ""))
+                                if norm_t1 == norm_t2:
+                                    return str(yt_id).strip()
             except Exception as e:
                 log_warning("DATABASE", f"Supabase duplicate check note: {e}")
 
@@ -961,6 +974,7 @@ class DatabaseService:
                 log_warning("DATABASE", f"Supabase mark uploaded note: {e}")
 
     def find_local_video(self, record: Dict[str, Any]) -> Optional[Path]:
+        from src.utils import has_moov_atom
         """
         Locates the corresponding MP4 video file on local disk for any database or Supabase record.
         Supports longform narrative features, postprocessed clips, and standard/livestream clips.
@@ -969,41 +983,97 @@ class DatabaseService:
         """
         # 1. Direct local_path if specified and exists
         lp = record.get("local_path")
-        if lp and Path(lp).is_file():
+        if lp and Path(lp).is_file() and has_moov_atom(Path(lp)):
             return Path(lp)
 
-        # 2. Check output/shorts_metadata.json
+        output_dir = settings.OUTPUT_DIR
+        search_dirs = [
+            output_dir,
+            output_dir / "clips",
+            output_dir / "temp_uploads",
+            output_dir / "montages",
+            output_dir / "longform_videos",
+        ]
+
+        # 2. Check storage_url basename if present
+        st_url = str(record.get("storage_url") or "").strip()
+        if st_url:
+            clean_url = st_url.split("?")[0].rstrip("/")
+            url_filename = clean_url.split("/")[-1]
+            if url_filename and url_filename.lower().endswith(".mp4"):
+                for sdir in search_dirs:
+                    cand = sdir / url_filename
+                    if cand.is_file() and has_moov_atom(cand):
+                        return cand
+
+        # 3. Check output/shorts_metadata.json
         meta_json = self.json_history_path
         if meta_json.is_file():
             try:
                 with open(meta_json, "r", encoding="utf-8") as f:
                     arr = json.load(f)
+                rec_id = str(record.get("id") or "")
+                rec_title = str(record.get("hook_title") or "").strip().lower()
                 for item in arr:
                     if (
-                        item.get("source_title") == record.get("source_title")
-                        or item.get("hook_title") == record.get("hook_title")
-                        or (item.get("created_at") and item.get("created_at") == record.get("created_at"))
+                        (rec_id and str(item.get("id")) == rec_id)
+                        or (rec_title and str(item.get("hook_title") or "").strip().lower() == rec_title)
                     ):
                         cand = item.get("local_path")
-                        if cand and Path(cand).is_file():
+                        if cand and Path(cand).is_file() and has_moov_atom(Path(cand)):
                             return Path(cand)
             except Exception:
                 pass
 
+        # 4. Check sanitized hook_title filename on disk
+        hook_t = str(record.get("hook_title") or "").strip()
+        if hook_t:
+            slug = re.sub(r"[^a-zA-Z0-9]+", "_", hook_t).strip("_")
+            for ext in [".mp4", "_Shorts.mp4", "_postprocessed.mp4"]:
+                for sdir in search_dirs:
+                    cand = sdir / f"{slug}{ext}"
+                    if cand.is_file() and has_moov_atom(cand):
+                        return cand
+
+        # 5. Timestamp and Part Number Matching (vital for multi-clip streams)
         src_vid = str(record.get("source_video_id") or "").lower()
-        hook_t = str(record.get("hook_title") or "").lower()
-        src_t = str(record.get("source_title") or "").lower()
+        start_time = float(record.get("start_time") or 0.0)
+        end_time = float(record.get("end_time") or 0.0)
+        part_num = int(record.get("part_number") or 0)
         duration = float(record.get("duration") or 0.0)
 
-        # 3. Longform features (duration > 180s, source_video_id == 'feature', or keywords)
-        if src_vid == "feature" or "full story" in hook_t or "longform" in hook_t or duration > 180:
-            longform_dir = settings.OUTPUT_DIR / "longform_videos"
+        # Look specifically in clips directory for matching timestamps
+        clips_dir = output_dir / "clips"
+        if clips_dir.is_dir() and (start_time > 0 or part_num > 0):
+            st_int = int(round(start_time))
+            end_int = int(round(end_time))
+            for f in clips_dir.glob("*.mp4"):
+                if f.stat().st_size < 1000:
+                    continue
+                f_name = f.stem.lower()
+                # Check exact start_end match in clip filename (e.g. clip_458_518)
+                if st_int > 0 and end_int > 0:
+                    time_pat = f"clip_{st_int}_{end_int}"
+                    if time_pat in f_name or f"{st_int}_{end_int}" in f_name:
+                        return f
+                    # Proximity match within 2 seconds
+                    m = re.search(r"clip_(\d+)_(\d+)", f_name)
+                    if m:
+                        c_start, c_end = int(m.group(1)), int(m.group(2))
+                        if abs(c_start - st_int) <= 2 and abs(c_end - end_int) <= 2:
+                            return f
+                # Check part number match (e.g. clip2) if source video matches
+                if part_num > 0 and src_vid and src_vid in f_name:
+                    if f"clip{part_num}_" in f_name or f"clip_{part_num}_" in f_name or f"part{part_num}" in f_name:
+                        return f
+
+        # 6. Longform features
+        src_t = str(record.get("source_title") or "").lower()
+        if src_vid == "feature" or "full story" in hook_t.lower() or "longform" in hook_t.lower() or duration > 180:
+            longform_dir = output_dir / "longform_videos"
             if longform_dir.is_dir():
                 clean_words = set(re.findall(r"[a-z0-9]+", (src_t + " " + hook_t).lower()))
-                clean_words.discard("full")
-                clean_words.discard("story")
-                clean_words.discard("the")
-                clean_words.discard("video")
+                clean_words.difference_update({"full", "story", "the", "video"})
                 best_match = None
                 best_score = 0
                 for f in longform_dir.glob("*.mp4"):
@@ -1019,29 +1089,29 @@ class DatabaseService:
                     feats.sort(key=lambda x: x.stat().st_mtime, reverse=True)
                     return feats[0]
 
-        # 4. Check matching keywords in output/ and subdirectories
+        # 7. Keyword matching with highest word overlap
         clean_words = set(re.findall(r"[a-z0-9]+", (src_t + " " + hook_t).lower()))
-        clean_words.discard("shorts")
-        clean_words.discard("viral")
-        clean_words.discard("video")
-        for check_dir in [
-            settings.OUTPUT_DIR,
-            settings.OUTPUT_DIR / "temp_uploads",
-            settings.OUTPUT_DIR / "montages",
-            settings.OUTPUT_DIR / "clips",
-        ]:
+        clean_words.difference_update({"shorts", "viral", "video", "the", "part"})
+        best_candidate = None
+        best_overlap = 0
+
+        for check_dir in [output_dir, output_dir / "clips", output_dir / "temp_uploads", output_dir / "montages"]:
             if not check_dir.is_dir():
                 continue
             for f in check_dir.glob("*.mp4"):
                 if f.stat().st_size < 1000:
                     continue
                 f_words = set(re.findall(r"[a-z0-9]+", f.stem.lower()))
-                common = clean_words.intersection(f_words)
-                if len(common) >= 2 or (src_vid and src_vid in f.stem.lower()):
-                    return f
+                overlap = len(clean_words.intersection(f_words))
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_candidate = f
 
-        # 5. Fallback for postprocess uploads / clips in temp_uploads
-        temp_ups = [f for f in (settings.OUTPUT_DIR / "temp_uploads").glob("*.mp4") if f.stat().st_size > 1000]
+        if best_candidate and best_overlap >= 2:
+            return best_candidate
+
+        # 8. Fallback for postprocess uploads in temp_uploads
+        temp_ups = [f for f in (output_dir / "temp_uploads").glob("*.mp4") if f.stat().st_size > 1000]
         if temp_ups:
             temp_ups.sort(key=lambda x: x.stat().st_mtime, reverse=True)
             return temp_ups[0]

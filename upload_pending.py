@@ -121,14 +121,20 @@ def run_pending_upload(upload_all: bool = False) -> None:
         else:
             tags_list = ["Shorts", "Viral"]
 
+        raw_score = float(item.get("hook_score") or 9.0)
+        if raw_score > 10.0:
+            raw_score = raw_score / 10.0
+        hook_score = int(round(max(1.0, min(10.0, raw_score))))
+
         clip_obj = ViralClip(
             start_time=float(item.get("start_time") or 0.0),
             end_time=float(item.get("end_time") or 50.0),
             hook_title=title,
-            hook_score=float(item.get("hook_score") or 90.0),
+            hook_score=hook_score,
             viral_reasoning=item.get("viral_reasoning") or "Autonomous queue upload",
             description=item.get("description") or f"{title} #Shorts",
             tags=tags_list,
+            source_title=item.get("source_title") or "",
         )
 
         # 5. Check duplicate upload
@@ -154,7 +160,8 @@ def run_pending_upload(upload_all: bool = False) -> None:
         yt_id = uploader.upload_short(video_path=video_file_path, clip=clip_obj)
 
         if yt_id:
-            yt_url = f"https://www.youtube.com/shorts/{yt_id}"
+            is_long = float(item.get("duration") or 0.0) > 180 or source_vid == "feature"
+            yt_url = f"https://www.youtube.com/watch?v={yt_id}" if is_long else f"https://www.youtube.com/shorts/{yt_id}"
             db_service.mark_short_uploaded(item.get("id"), source_vid, part_num, yt_id)
             uploaded_records.append({
                 "part": part_str,

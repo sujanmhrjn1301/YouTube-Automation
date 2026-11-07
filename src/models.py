@@ -4,7 +4,7 @@ Domain models and data contracts for YouTube Shorts automation pipeline.
 
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LLMProvider(str, Enum):
@@ -65,6 +65,8 @@ class ClipCut(BaseModel):
 
 class ViralClip(BaseModel):
     """Structured viral candidate output from LLM analysis."""
+    model_config = ConfigDict(extra="allow")
+
     start_time: float = Field(..., description="Start timestamp in seconds (or start of first cut)")
     end_time: float = Field(..., description="End timestamp in seconds (or end of last cut)")
     cuts: List[ClipCut] = Field(default_factory=list, description="Local condensed jump-cut segments")
@@ -73,6 +75,7 @@ class ViralClip(BaseModel):
     tags: List[str] = Field(default_factory=list, description="SEO tags for viral reach")
     viral_reasoning: str = Field(..., description="Detailed explanation of why this moment hooks viewers")
     hook_score: int = Field(default=8, ge=1, le=10, description="Hook potential rating from 1 to 10")
+    source_title: str = Field(default="", description="Source video title")
 
     @property
     def total_duration(self) -> float:
